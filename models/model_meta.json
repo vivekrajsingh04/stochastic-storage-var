@@ -1,0 +1,31 @@
+{
+  "anomaly_features": [
+    "Daily_Growth",
+    "Write_Count",
+    "Delete_Count",
+    "IO_Throughput_MBps",
+    "Latency_ms",
+    "Write_Delete_Ratio",
+    "Write_ZScore",
+    "IO_ZScore",
+    "Growth_ZScore",
+    "Growth_Volatility",
+    "Net_Tx_Delta"
+  ],
+  "window_size": 30,
+  "max_capacity_gb": 2000.0,
+  "arima_order": [
+    2,
+    1,
+    2
+  ],
+  "arima_mae": 51.5995,
+  "lstm_mae": 33.3643,
+  "ens_mae": 41.5089,
+  "ensemble_weights": {
+    "arima": 0.4,
+    "lstm": 0.6
+  },
+  "version": "1.0.0",
+  "project": "StorageIQ VIT-SanDisk Hackathon 2026"
+}

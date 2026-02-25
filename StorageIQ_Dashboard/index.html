@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>StorageIQ — AI-Driven Capacity Forecasting</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0a0e1a;--bg2:#111827;--bg3:#1a2235;--card:#161d30;
+  --border:#1e2d45;--text:#e2e8f0;--muted:#64748b;
+  --blue:#3b82f6;--green:#10b981;--yellow:#f59e0b;--red:#ef4444;--purple:#8b5cf6;
+}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+
+/* ── Header ── */
+.header{background:linear-gradient(135deg,#0f172a,#1e1b4b);border-bottom:1px solid var(--border);padding:1rem 2rem;display:flex;align-items:center;justify-content:space-between}
+.logo{display:flex;align-items:center;gap:.75rem}
+.logo-icon{width:40px;height:40px;background:linear-gradient(135deg,var(--blue),var(--purple));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.2rem}
+.logo-text{font-size:1.25rem;font-weight:700;background:linear-gradient(to right,var(--blue),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.badge{background:#1e2d45;border:1px solid var(--blue);color:var(--blue);font-size:.7rem;padding:.25rem .6rem;border-radius:20px;font-weight:600}
+.status-dot{width:8px;height:8px;background:var(--green);border-radius:50%;display:inline-block;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* ── Nav ── */
+nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:.5rem 2rem;display:flex;gap:.5rem}
+.nav-btn{padding:.4rem 1rem;border-radius:6px;border:none;cursor:pointer;font-size:.85rem;font-family:'Inter',sans-serif;transition:all .2s;background:transparent;color:var(--muted)}
+.nav-btn.active,.nav-btn:hover{background:var(--border);color:var(--text)}
+
+/* ── Layout ── */
+main{padding:1.5rem 2rem;max-width:1400px;margin:0 auto}
+.section{display:none}.section.active{display:block}
+
+/* ── Metrics Row ── */
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-bottom:1.5rem}
+.metric-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.25rem;position:relative;overflow:hidden}
+.metric-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.metric-card.blue::before{background:var(--blue)}
+.metric-card.green::before{background:var(--green)}
+.metric-card.yellow::before{background:var(--yellow)}
+.metric-card.red::before{background:var(--red)}
+.metric-card.purple::before{background:var(--purple)}
+.metric-label{font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.4rem}
+.metric-value{font-size:1.8rem;font-weight:700;line-height:1}
+.metric-sub{font-size:.8rem;color:var(--muted);margin-top:.3rem}
+
+/* ── Cards ── */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.grid3{display:grid;grid-template-columns:2fr 1fr;gap:1rem}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.25rem;margin-bottom:1rem}
+.card-title{font-size:.9rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:1rem;display:flex;align-items:center;gap:.5rem}
+
+/* ── Risk Gauge ── */
+.gauge-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;height:200px}
+.gauge-circle{width:150px;height:150px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;border:12px solid var(--border);position:relative}
+.gauge-score{font-size:2.5rem;font-weight:800}
+.gauge-label{font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-top:.2rem}
+
+/* ── Table ── */
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th{text-align:left;padding:.6rem .8rem;color:var(--muted);font-weight:500;font-size:.75rem;text-transform:uppercase;border-bottom:1px solid var(--border)}
+td{padding:.7rem .8rem;border-bottom:1px solid var(--border)}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#1e2d4533}
+
+/* ── Badges ── */
+.sev{padding:.2rem .6rem;border-radius:20px;font-size:.72rem;font-weight:600}
+.sev-HIGH{background:#ef444422;color:#ef4444;border:1px solid #ef4444}
+.sev-MEDIUM{background:#f59e0b22;color:#f59e0b;border:1px solid #f59e0b}
+.sev-LOW{background:#10b98122;color:#10b981;border:1px solid #10b981}
+
+/* ── Recommendation Cards ── */
+.rec-card{border-radius:10px;padding:1rem;margin-bottom:.75rem;border-left:4px solid;display:flex;align-items:flex-start;gap:.75rem}
+.rec-icon{font-size:1.3rem;flex-shrink:0}
+.rec-body .rec-priority{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.2rem}
+.rec-body .rec-action{font-size:.9rem;font-weight:600;margin-bottom:.2rem}
+.rec-body .rec-meta{font-size:.78rem;color:var(--muted)}
+
+/* ── Loading ── */
+.loading{display:flex;align-items:center;justify-content:center;height:200px;color:var(--muted);gap:.5rem}
+.spinner{width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Alert Banner ── */
+.alert{padding:.75rem 1rem;border-radius:8px;margin-bottom:1rem;font-size:.85rem;display:flex;align-items:center;gap:.5rem}
+.alert-warn{background:#f59e0b15;border:1px solid var(--yellow);color:var(--yellow)}
+.alert-danger{background:#ef444415;border:1px solid var(--red);color:var(--red)}
+.alert-success{background:#10b98115;border:1px solid var(--green);color:var(--green)}
+
+canvas{max-height:280px}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="logo">
+    <div class="logo-icon">🗄️</div>
+    <div>
+      <div class="logo-text">StorageIQ</div>
+      <div style="font-size:.7rem;color:var(--muted)">AI-Driven Capacity Forecasting & Risk Prediction</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:1rem">
+    <div style="font-size:.8rem;color:var(--muted)"><span class="status-dot"></span> Live System</div>
+    <div class="badge">VIT–SanDisk Hackathon 2026</div>
+    <div class="badge" style="border-color:var(--purple);color:var(--purple)">Team StorageIQ</div>
+  </div>
+</div>
+
+<!-- Nav -->
+<nav>
+  <button class="nav-btn active" onclick="showTab('dashboard',this)">📊 Dashboard</button>
+  <button class="nav-btn" onclick="showTab('forecast',this)">📈 Forecast Analysis</button>
+  <button class="nav-btn" onclick="showTab('alerts',this)">🚨 Alert Center</button>
+  <button class="nav-btn" onclick="showTab('recs',this)">💡 Recommendations</button>
+</nav>
+
+<main>
+
+<!-- ══ DASHBOARD TAB ══ -->
+<div id="dashboard" class="section active">
+  <div class="metrics" id="metrics-row">
+    <div class="loading"><div class="spinner"></div> Loading metrics...</div>
+  </div>
+  <div class="grid3">
+    <div class="card">
+      <div class="card-title">📈 30-Day Capacity Forecast</div>
+      <canvas id="forecastChart"></canvas>
+    </div>
+    <div class="card">
+      <div class="card-title">⚠️ Overflow Risk Score</div>
+      <div class="gauge-wrap">
+        <div class="gauge-circle" id="gaugeCircle">
+          <div class="gauge-score" id="gaugeScore">–</div>
+          <div class="gauge-label" id="gaugeLabel">–</div>
+        </div>
+        <div style="font-size:.8rem;color:var(--muted);margin-top:.75rem;text-align:center" id="gaugeDetail"></div>
+      </div>
+      <canvas id="riskChart" style="max-height:130px;margin-top:.5rem"></canvas>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">🔍 Recent Anomalies</div>
+    <div id="anomaly-summary"></div>
+  </div>
+</div>
+
+<!-- ══ FORECAST TAB ══ -->
+<div id="forecast" class="section">
+  <div class="metrics" id="fc-metrics"></div>
+  <div class="card">
+    <div class="card-title">📈 ARIMA vs LSTM vs Ensemble — 30-Day Projection</div>
+    <canvas id="fcDetailChart"></canvas>
+  </div>
+</div>
+
+<!-- ══ ALERTS TAB ══ -->
+<div id="alerts" class="section">
+  <div id="alert-banners"></div>
+  <div class="card">
+    <div class="card-title">🔍 Full Anomaly Log</div>
+    <table>
+      <thead><tr><th>Date</th><th>Capacity</th><th>Daily Growth</th><th>Severity</th><th>Threat Type</th></tr></thead>
+      <tbody id="anomaly-table"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══ RECOMMENDATIONS TAB ══ -->
+<div id="recs" class="section">
+  <div class="metrics" id="rec-metrics"></div>
+  <div id="rec-cards"></div>
+</div>
+
+</main>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let FC={}, RS={}, AN={}, RC={};
+let fcChart=null, riskChart=null, fcDetailChart=null;
+
+// ── Tab switching ─────────────────────────────────────────────────────────
+function showTab(id, btn) {
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ── Fetch all data on load ────────────────────────────────────────────────
+async function fetchAll() {
+  try {
+    [FC, RS, AN, RC] = await Promise.all([
+      fetch('/api/forecast').then(r=>r.json()),
+      fetch('/api/risk-score').then(r=>r.json()),
+      fetch('/api/anomalies').then(r=>r.json()),
+      fetch('/api/recommend').then(r=>r.json()),
+    ]);
+    renderDashboard();
+    renderForecastTab();
+    renderAlertsTab();
+    renderRecsTab();
+  } catch(e) {
+    document.getElementById('metrics-row').innerHTML =
+      `<div class="alert alert-warn">⚠️ Could not connect to API. Make sure <b>uvicorn main:app</b> is running and models/ folder is present.</div>`;
+  }
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────
+function renderDashboard() {
+  const s = FC.summary; const r = RS;
+  const riskColor = r.color;
+
+  // Metrics
+  document.getElementById('metrics-row').innerHTML = `
+    <div class="metric-card blue">
+      <div class="metric-label">Current Capacity</div>
+      <div class="metric-value" style="color:var(--blue)">${s.current_gb} <span style="font-size:1rem">GB</span></div>
+      <div class="metric-sub">of 2,000 GB (${(s.current_gb/2000*100).toFixed(1)}% used)</div>
+    </div>
+    <div class="metric-card green">
+      <div class="metric-label">30-Day Forecast</div>
+      <div class="metric-value" style="color:var(--green)">${s.forecast_30d} <span style="font-size:1rem">GB</span></div>
+      <div class="metric-sub">${s.util_pct_30d}% utilisation in 30 days</div>
+    </div>
+    <div class="metric-card ${r.risk_label==='HIGH'?'red':r.risk_label==='MEDIUM'?'yellow':'green'}">
+      <div class="metric-label">Risk Score</div>
+      <div class="metric-value" style="color:${riskColor}">${r.risk_score_pct}<span style="font-size:1rem">%</span></div>
+      <div class="metric-sub">${r.risk_label} — Overflow probability</div>
+    </div>
+    <div class="metric-card purple">
+      <div class="metric-label">Anomalies Detected</div>
+      <div class="metric-value" style="color:var(--purple)">${AN.total}</div>
+      <div class="metric-sub">${(AN.severity_counts||{}).HIGH||0} HIGH · ${(AN.severity_counts||{}).MEDIUM||0} MEDIUM</div>
+    </div>
+    <div class="metric-card ${r.risk_label==='HIGH'?'red':'blue'}">
+      <div class="metric-label">Headroom</div>
+      <div class="metric-value" style="color:${riskColor}">${r.headroom_gb} <span style="font-size:1rem">GB</span></div>
+      <div class="metric-sub">VaR-95: ${r.var_95_gb} GB</div>
+    </div>
+  `;
+
+  // Forecast chart (mini — last 60 days + 30 day ensemble)
+  const labels = [...FC.historical.map(h=>h.Timestamp), ...FC.forecast_dates];
+  const histData = [...FC.historical.map(h=>h.Capacity_GB), ...new Array(30).fill(null)];
+  const fcData   = [...new Array(FC.historical.length-1).fill(null), FC.historical.at(-1).Capacity_GB, ...FC.ensemble_forecast];
+  if(fcChart) fcChart.destroy();
+  fcChart = new Chart(document.getElementById('forecastChart'), {
+    type:'line', data:{labels,
+      datasets:[
+        {label:'Historical',data:histData,borderColor:'#3b82f6',borderWidth:1.5,pointRadius:0,fill:false,tension:.3},
+        {label:'Ensemble Forecast',data:fcData,borderColor:'#10b981',borderWidth:2,borderDash:[6,3],pointRadius:0,fill:false,tension:.3},
+      ]},
+    options:{responsive:true,interaction:{intersect:false,mode:'index'},plugins:{legend:{labels:{color:'#94a3b8',font:{size:11}}}},scales:{x:{ticks:{color:'#475569',maxTicksLimit:8},grid:{color:'#1e2d45'}},y:{ticks:{color:'#475569'},grid:{color:'#1e2d45'}}}}
+  });
+
+  // Risk gauge
+  const gc = document.getElementById('gaugeCircle');
+  const col = riskColor;
+  gc.style.borderColor = col;
+  document.getElementById('gaugeScore').textContent = r.risk_score_pct+'%';
+  document.getElementById('gaugeScore').style.color = col;
+  document.getElementById('gaugeLabel').textContent = r.risk_label;
+  document.getElementById('gaugeLabel').style.color = col;
+  document.getElementById('gaugeDetail').textContent = `${r.risk_score_pct}% chance of overflow in 30 days | VaR-95: ${r.var_95_gb} GB`;
+
+  // Mini risk chart
+  if(riskChart) riskChart.destroy();
+  riskChart = new Chart(document.getElementById('riskChart'), {
+    type:'line', data:{labels:Array.from({length:30},(_,i)=>`D${i+1}`),
+      datasets:[{label:'Breach %',data:RS.daily_breach_pct,borderColor:col,backgroundColor:col+'22',fill:true,borderWidth:1.5,pointRadius:0,tension:.4}]},
+    options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#475569',maxTicksLimit:6},grid:{color:'#1e2d45'}},y:{ticks:{color:'#475569'},grid:{color:'#1e2d45'},max:100}}}
+  });
+
+  // Anomaly summary
+  const anRows = (AN.anomalies||[]).slice(0,5).map(a=>`
+    <tr><td>${a.date}</td><td>${a.capacity_gb} GB</td><td>+${a.daily_growth} GB</td>
+    <td><span class="sev sev-${a.severity}">${a.severity}</span></td><td style="font-size:.8rem">${a.threat}</td></tr>
+  `).join('');
+  document.getElementById('anomaly-summary').innerHTML = `
+    <table><thead><tr><th>Date</th><th>Capacity</th><th>Daily Growth</th><th>Severity</th><th>Threat</th></tr></thead>
+    <tbody>${anRows||'<tr><td colspan=5 style="color:var(--muted)">No anomalies detected ✅</td></tr>'}</tbody></table>`;
+}
+
+// ── Forecast Tab ──────────────────────────────────────────────────────────
+function renderForecastTab() {
+  const s = FC.summary;
+  document.getElementById('fc-metrics').innerHTML = `
+    <div class="metric-card blue"><div class="metric-label">7-Day Forecast</div><div class="metric-value" style="color:var(--blue)">${s.forecast_7d} <span style="font-size:1rem">GB</span></div><div class="metric-sub">${(s.forecast_7d/2000*100).toFixed(1)}% util</div></div>
+    <div class="metric-card purple"><div class="metric-label">14-Day Forecast</div><div class="metric-value" style="color:var(--purple)">${s.forecast_14d} <span style="font-size:1rem">GB</span></div><div class="metric-sub">${(s.forecast_14d/2000*100).toFixed(1)}% util</div></div>
+    <div class="metric-card green"><div class="metric-label">30-Day Forecast</div><div class="metric-value" style="color:var(--green)">${s.forecast_30d} <span style="font-size:1rem">GB</span></div><div class="metric-sub">${s.util_pct_30d}% util</div></div>
+  `;
+  const labels = [...FC.historical.map(h=>h.Timestamp), ...FC.forecast_dates];
+  const hist   = [...FC.historical.map(h=>h.Capacity_GB), ...new Array(30).fill(null)];
+  const arima  = [...new Array(FC.historical.length-1).fill(null), FC.historical.at(-1).Capacity_GB, ...FC.arima_forecast];
+  const lstmF  = [...new Array(FC.historical.length-1).fill(null), FC.historical.at(-1).Capacity_GB, ...FC.lstm_forecast];
+  const ensF   = [...new Array(FC.historical.length-1).fill(null), FC.historical.at(-1).Capacity_GB, ...FC.ensemble_forecast];
+  if(fcDetailChart) fcDetailChart.destroy();
+  fcDetailChart = new Chart(document.getElementById('fcDetailChart'), {
+    type:'line', data:{labels, datasets:[
+      {label:'Historical',data:hist,borderColor:'#3b82f6',borderWidth:1.5,pointRadius:0,fill:false,tension:.3},
+      {label:'ARIMA',data:arima,borderColor:'#ef4444',borderWidth:1.5,borderDash:[4,4],pointRadius:0,fill:false,tension:.3},
+      {label:'LSTM',data:lstmF,borderColor:'#f59e0b',borderWidth:1.5,borderDash:[4,4],pointRadius:0,fill:false,tension:.3},
+      {label:'Ensemble ★',data:ensF,borderColor:'#10b981',borderWidth:2.5,pointRadius:0,fill:false,tension:.3},
+    ]},
+    options:{responsive:true,interaction:{intersect:false,mode:'index'},plugins:{legend:{labels:{color:'#94a3b8'}}},scales:{x:{ticks:{color:'#475569',maxTicksLimit:10},grid:{color:'#1e2d45'}},y:{ticks:{color:'#475569'},grid:{color:'#1e2d45'}}}}
+  });
+}
+
+// ── Alerts Tab ────────────────────────────────────────────────────────────
+function renderAlertsTab() {
+  const sc = AN.severity_counts || {};
+  const banners = [];
+  if((sc.HIGH||0)>0) banners.push(`<div class="alert alert-danger">🔴 ${sc.HIGH} HIGH severity anomalies detected — investigate immediately</div>`);
+  if((sc.MEDIUM||0)>0) banners.push(`<div class="alert alert-warn">🟡 ${sc.MEDIUM} MEDIUM severity anomalies detected — review write patterns</div>`);
+  if(!banners.length) banners.push(`<div class="alert alert-success">✅ No critical anomalies detected — system healthy</div>`);
+  document.getElementById('alert-banners').innerHTML = banners.join('');
+  const rows = (AN.anomalies||[]).map(a=>`
+    <tr><td>${a.date}</td><td>${a.capacity_gb} GB</td><td style="color:${a.daily_growth>20?'#ef4444':'#94a3b8'}">+${a.daily_growth} GB</td>
+    <td><span class="sev sev-${a.severity}">${a.severity}</span></td><td style="font-size:.8rem">${a.threat}</td></tr>
+  `).join('');
+  document.getElementById('anomaly-table').innerHTML = rows || '<tr><td colspan=5 style="color:var(--muted)">No anomalies found ✅</td></tr>';
+}
+
+// ── Recommendations Tab ───────────────────────────────────────────────────
+function renderRecsTab() {
+  const m = RC.summary_metrics||{};
+  document.getElementById('rec-metrics').innerHTML = `
+    <div class="metric-card red"><div class="metric-label">Risk Score</div><div class="metric-value" style="color:var(--red)">${m.risk||'–'}%</div><div class="metric-sub">Overflow probability</div></div>
+    <div class="metric-card blue"><div class="metric-label">30-Day Forecast</div><div class="metric-value" style="color:var(--blue)">${m.forecast_30d||'–'} GB</div><div class="metric-sub">${m.util_pct||'–'}% utilisation</div></div>
+    <div class="metric-card purple"><div class="metric-label">Anomalies</div><div class="metric-value" style="color:var(--purple)">${m.anomalies||'–'}</div><div class="metric-sub">Flagged events</div></div>
+    <div class="metric-card green"><div class="metric-label">Actions Generated</div><div class="metric-value" style="color:var(--green)">${RC.total||'–'}</div><div class="metric-sub">Prioritised recommendations</div></div>
+  `;
+  document.getElementById('rec-cards').innerHTML = (RC.recommendations||[]).map(r=>`
+    <div class="rec-card" style="background:${r.color}11;border-left-color:${r.color}">
+      <div class="rec-icon">${r.icon}</div>
+      <div class="rec-body" style="flex:1">
+        <div class="rec-priority" style="color:${r.color}">${r.priority} — ${r.category}</div>
+        <div class="rec-action">${r.action}</div>
+        <div class="rec-meta">Est. savings: ${r.space} &nbsp;|&nbsp; Confidence: ${r.confidence}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+fetchAll();
+</script>
+</body>
+</html>
