@@ -16,7 +16,13 @@ import pandas as pd
 import numpy as np
 import json, joblib, os, warnings
 from datetime import timedelta
-import torch, torch.nn as nn
+try:
+    import torch
+    import torch.nn as nn
+    HAS_TORCH = True
+except ImportError:
+    HAS_TORCH = False
+
 warnings.filterwarnings("ignore")
 
 app = FastAPI(title="StorageIQ API", version="1.0.0")
@@ -43,20 +49,25 @@ except Exception as e:
     MODELS_OK = False
 
 # ── LSTM Model Definition (must match training) ────────────────────────────────
-class LSTMModel(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.lstm = nn.LSTM(1, 128, 2, batch_first=True, dropout=0.25)
-        self.bn   = nn.BatchNorm1d(128)
-        self.fc   = nn.Sequential(nn.Linear(128,64), nn.ReLU(), nn.Dropout(0.1), nn.Linear(64,1))
-    def forward(self, x):
-        out,_ = self.lstm(x); return self.fc(self.bn(out[:,-1,:]))
+if HAS_TORCH:
+    class LSTMModel(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.lstm = nn.LSTM(1, 128, 2, batch_first=True, dropout=0.25)
+            self.bn   = nn.BatchNorm1d(128)
+            self.fc   = nn.Sequential(nn.Linear(128,64), nn.ReLU(), nn.Dropout(0.1), nn.Linear(64,1))
+        def forward(self, x):
+            out,_ = self.lstm(x); return self.fc(self.bn(out[:,-1,:]))
 
-try:
-    lstm_model = LSTMModel()
-    lstm_model.load_state_dict(torch.load("models/lstm_model.pt", map_location="cpu"))
-    lstm_model.eval()
-except:
+    try:
+        lstm_model = LSTMModel()
+        lstm_model.load_state_dict(torch.load("models/lstm_model.pt", map_location="cpu"))
+        lstm_model.eval()
+    except Exception as e:
+        print(f"⚠️ Could not load LSTM model weights: {e}")
+        lstm_model = None
+else:
+    print("ℹ️ PyTorch not available. LSTM model disabled (using fallback forecast).")
     lstm_model = None
 
 # ── Helper: Feature Engineering ───────────────────────────────────────────────
@@ -98,13 +109,16 @@ def get_forecast():
 
     # LSTM iterative forecast
     try:
-        seq = scaler.transform(cap.reshape(-1,1))[-WINDOW:].reshape(1,WINDOW,1)
-        lstm_fc = []
-        with torch.no_grad():
-            for _ in range(HORIZON):
-                t=torch.FloatTensor(seq); p=lstm_model(t).item(); lstm_fc.append(p)
-                seq=np.append(seq[:,1:,:],[[[p]]],axis=1)
-        lstm_preds = scaler.inverse_transform(np.array(lstm_fc).reshape(-1,1)).flatten().tolist()
+        if HAS_TORCH and lstm_model is not None:
+            seq = scaler.transform(cap.reshape(-1,1))[-WINDOW:].reshape(1,WINDOW,1)
+            lstm_fc = []
+            with torch.no_grad():
+                for _ in range(HORIZON):
+                    t=torch.FloatTensor(seq); p=lstm_model(t).item(); lstm_fc.append(p)
+                    seq=np.append(seq[:,1:,:],[[[p]]],axis=1)
+            lstm_preds = scaler.inverse_transform(np.array(lstm_fc).reshape(-1,1)).flatten().tolist()
+        else:
+            raise ValueError("Torch not available or model not loaded")
     except:
         # Fallback: simple linear extrapolation
         mu = float(df["Capacity_GB"].diff().dropna().iloc[-30:].mean())
