@@ -1,0 +1,14 @@
+# Core pipeline
+numpy>=1.26
+pandas>=2.2
+scipy>=1.11
+scikit-learn>=1.5
+statsmodels>=0.14
+joblib>=1.4
+
+# Dashboard
+fastapi>=0.115
+uvicorn[standard]>=0.30
+
+# Optional: LSTM forecasting (pipeline falls back to ARIMA without it)
+# torch>=2.3

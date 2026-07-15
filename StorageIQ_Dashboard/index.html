@@ -2,1139 +2,175 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>StorageIQ — AI-Driven Capacity Forecasting & Risk Prediction</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StorageIQ — Stochastic Storage VaR</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <style>
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-:root {
-  --bg-gradient: radial-gradient(circle at 50% 0%, #151a30 0%, #0a0d1a 100%);
-  --bg-color: #070913;
-  --panel-bg: rgba(22, 28, 48, 0.45);
-  --panel-border: rgba(255, 255, 255, 0.07);
-  --panel-border-hover: rgba(59, 130, 246, 0.3);
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  
-  --blue: #3b82f6;
-  --blue-glow: rgba(59, 130, 246, 0.25);
-  --green: #10b981;
-  --green-glow: rgba(16, 185, 129, 0.25);
-  --yellow: #fbbf24;
-  --yellow-glow: rgba(251, 191, 36, 0.25);
-  --red: #ef4444;
-  --red-glow: rgba(239, 68, 68, 0.25);
-  --purple: #a855f7;
-  --purple-glow: rgba(168, 85, 247, 0.25);
-  --cyan: #06b6d4;
-  
-  --font-display: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-}
-
-body {
-  font-family: var(--font-sans);
-  background-color: var(--bg-color);
-  background-image: var(--bg-gradient);
-  color: var(--text-primary);
-  min-height: 100vh;
-  overflow-x: hidden;
-  line-height: 1.5;
-}
-
-/* Custom Scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-::-webkit-scrollbar-track {
-  background: rgba(7, 9, 19, 0.5);
-}
-::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
-}
-
-/* ── Header ── */
-.header {
-  background: rgba(10, 15, 30, 0.7);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid var(--panel-border);
-  padding: 1.25rem 2rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
-
-.logo {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.logo-icon {
-  width: 44px;
-  height: 44px;
-  background: linear-gradient(135deg, var(--blue), var(--purple));
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.4rem;
-  box-shadow: 0 0 20px rgba(168, 85, 247, 0.35);
-  position: relative;
-}
-
-.logo-icon::after {
-  content: '';
-  position: absolute;
-  inset: -2px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, var(--blue), var(--purple));
-  z-index: -1;
-  opacity: 0.5;
-  filter: blur(4px);
-}
-
-.logo-text {
-  font-family: var(--font-display);
-  font-size: 1.5rem;
-  font-weight: 800;
-  letter-spacing: -0.025em;
-  background: linear-gradient(to right, #60a5fa, #c084fc);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.logo-sub {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-  font-weight: 500;
-}
-
-.header-meta {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.status-badge {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  background: rgba(16, 185, 129, 0.08);
-  border: 1px solid rgba(16, 185, 129, 0.2);
-  color: var(--green);
-  font-size: 0.75rem;
-  padding: 0.35rem 0.75rem;
-  border-radius: 20px;
-  font-weight: 600;
-  letter-spacing: 0.025em;
-}
-
-.status-dot {
-  width: 8px;
-  height: 8px;
-  background-color: var(--green);
-  border-radius: 50%;
-  box-shadow: 0 0 10px var(--green);
-  animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.2); opacity: 0.4; }
-}
-
-.badge {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--panel-border);
-  color: var(--text-secondary);
-  font-size: 0.75rem;
-  padding: 0.35rem 0.75rem;
-  border-radius: 8px;
-  font-weight: 600;
-  transition: all 0.2s;
-}
-
-.badge-primary {
-  border-color: rgba(59, 130, 246, 0.3);
-  color: var(--blue);
-  background: rgba(59, 130, 246, 0.05);
-}
-
-.badge-purple {
-  border-color: rgba(168, 85, 247, 0.3);
-  color: var(--purple);
-  background: rgba(168, 85, 247, 0.05);
-}
-
-/* ── Nav ── */
-nav {
-  background: rgba(13, 18, 36, 0.8);
-  border-bottom: 1px solid var(--panel-border);
-  padding: 0.5rem 2rem;
-  display: flex;
-  gap: 0.75rem;
-}
-
-.nav-btn {
-  padding: 0.6rem 1.25rem;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  cursor: pointer;
-  font-size: 0.875rem;
-  font-weight: 600;
-  font-family: var(--font-sans);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  background: transparent;
-  color: var(--text-secondary);
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.nav-btn:hover {
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--text-primary);
-}
-
-.nav-btn.active {
-  background: rgba(59, 130, 246, 0.08);
-  border-color: rgba(59, 130, 246, 0.2);
-  color: #60a5fa;
-  box-shadow: 0 0 15px rgba(59, 130, 246, 0.1);
-}
-
-/* ── Layout ── */
-main {
-  padding: 2rem;
-  max-width: 1400px;
-  margin: 0 auto;
-}
-
-.section {
-  display: none;
-  animation: fadeIn 0.4s ease-out forwards;
-}
-
-.section.active {
-  display: block;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* ── Metrics Grid ── */
-.metrics {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 1.25rem;
-  margin-bottom: 2rem;
-}
-
-.metric-card {
-  background: var(--panel-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--panel-border);
-  border-radius: 16px;
-  padding: 1.5rem;
-  position: relative;
-  overflow: hidden;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.metric-card:hover {
-  transform: translateY(-2px);
-  border-color: var(--panel-border-hover);
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
-}
-
-.metric-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-}
-
-.metric-card.blue::before { background: linear-gradient(90deg, var(--blue), var(--cyan)); }
-.metric-card.green::before { background: linear-gradient(90deg, var(--green), var(--cyan)); }
-.metric-card.yellow::before { background: linear-gradient(90deg, var(--yellow), #f59e0b); }
-.metric-card.red::before { background: linear-gradient(90deg, var(--red), #f43f5e); }
-.metric-card.purple::before { background: linear-gradient(90deg, var(--purple), #ec4899); }
-
-.metric-label {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-weight: 700;
-  margin-bottom: 0.5rem;
-}
-
-.metric-value {
-  font-family: var(--font-display);
-  font-size: 2.2rem;
-  font-weight: 800;
-  line-height: 1;
-  letter-spacing: -0.02em;
-  margin-bottom: 0.35rem;
-}
-
-.metric-sub {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  font-weight: 500;
-}
-
-/* ── Content Grids ── */
-.grid3 {
-  display: grid;
-  grid-template-columns: 2.2fr 1fr;
-  gap: 1.5rem;
-  margin-bottom: 1.5rem;
-}
-
-@media (max-width: 1024px) {
-  .grid3 {
-    grid-template-columns: 1fr;
+  :root{
+    --bg:#0b0f17; --panel:#111827; --panel2:#0f172a; --border:#1f2937;
+    --text:#e5e7eb; --muted:#9ca3af; --accent:#38bdf8; --accent2:#a78bfa;
+    --good:#34d399; --warn:#fbbf24; --bad:#f87171;
   }
-}
-
-.card {
-  background: var(--panel-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--panel-border);
-  border-radius: 16px;
-  padding: 1.5rem;
-  margin-bottom: 1.5rem;
-  transition: border-color 0.3s;
-}
-
-.card:hover {
-  border-color: rgba(255, 255, 255, 0.12);
-}
-
-.card-title {
-  font-family: var(--font-display);
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: var(--text-primary);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin-bottom: 1.5rem;
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-}
-
-/* ── Risk Gauge ── */
-.gauge-wrap {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 220px;
-  position: relative;
-}
-
-.gauge-circle {
-  width: 160px;
-  height: 160px;
-  border-radius: 50%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  border: 10px solid rgba(255, 255, 255, 0.03);
-  position: relative;
-  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.4);
-  transition: all 0.5s ease;
-}
-
-.gauge-circle::before {
-  content: '';
-  position: absolute;
-  inset: -10px;
-  border-radius: 50%;
-  border: 10px solid transparent;
-  border-top-color: inherit;
-  transform: rotate(-45deg);
-  z-index: 1;
-}
-
-.gauge-score {
-  font-family: var(--font-display);
-  font-size: 2.8rem;
-  font-weight: 800;
-  line-height: 1;
-  letter-spacing: -0.02em;
-}
-
-.gauge-label {
-  font-size: 0.8rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-top: 0.4rem;
-}
-
-.gauge-detail-text {
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-  margin-top: 1rem;
-  text-align: center;
-  max-width: 220px;
-  line-height: 1.4;
-}
-
-/* ── Tables ── */
-.table-responsive {
-  width: 100%;
-  overflow-x: auto;
-}
-
-table {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  font-size: 0.875rem;
-}
-
-th {
-  text-align: left;
-  padding: 0.85rem 1rem;
-  color: var(--text-secondary);
-  font-weight: 600;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  border-bottom: 1px solid var(--panel-border);
-  background: rgba(0, 0, 0, 0.1);
-}
-
-th:first-child { border-top-left-radius: 8px; border-bottom-left-radius: 8px; }
-th:last-child { border-top-right-radius: 8px; border-bottom-right-radius: 8px; }
-
-td {
-  padding: 0.95rem 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-  color: var(--text-primary);
-}
-
-tr:last-child td {
-  border-bottom: none;
-}
-
-tr:hover td {
-  background: rgba(255, 255, 255, 0.02);
-}
-
-/* ── Badges ── */
-.sev {
-  padding: 0.25rem 0.6rem;
-  border-radius: 6px;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.025em;
-  display: inline-block;
-  text-align: center;
-}
-.sev-HIGH {
-  background: rgba(239, 68, 68, 0.1);
-  color: #f87171;
-  border: 1px solid rgba(239, 68, 68, 0.25);
-  box-shadow: 0 0 10px rgba(239, 68, 68, 0.15);
-}
-.sev-MEDIUM {
-  background: rgba(245, 158, 11, 0.1);
-  color: #fbbf24;
-  border: 1px solid rgba(245, 158, 11, 0.25);
-}
-.sev-LOW {
-  background: rgba(16, 185, 129, 0.1);
-  color: #34d399;
-  border: 1px solid rgba(16, 185, 129, 0.25);
-}
-
-/* ── Recommendation Cards ── */
-.rec-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 1rem;
-}
-
-.rec-card {
-  border-radius: 12px;
-  padding: 1.25rem;
-  border-left: 5px solid;
-  display: flex;
-  align-items: flex-start;
-  gap: 1rem;
-  transition: all 0.2s;
-  background: rgba(255, 255, 255, 0.02);
-}
-
-.rec-card:hover {
-  transform: translateX(4px);
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.rec-icon {
-  font-size: 1.5rem;
-  background: rgba(255, 255, 255, 0.05);
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
-
-.rec-body {
-  flex: 1;
-}
-
-.rec-priority {
-  font-size: 0.72rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  margin-bottom: 0.25rem;
-}
-
-.rec-action {
-  font-size: 0.95rem;
-  font-weight: 700;
-  margin-bottom: 0.35rem;
-  color: var(--text-primary);
-}
-
-.rec-meta {
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-  display: flex;
-  gap: 1.5rem;
-  flex-wrap: wrap;
-}
-
-.rec-meta span {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-}
-
-/* ── Alert Banner ── */
-.alert {
-  padding: 1rem 1.25rem;
-  border-radius: 12px;
-  margin-bottom: 1.25rem;
-  font-size: 0.875rem;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  font-weight: 500;
-}
-
-.alert-warn {
-  background: rgba(245, 158, 11, 0.07);
-  border: 1px solid rgba(245, 158, 11, 0.2);
-  color: #fbbf24;
-}
-
-.alert-danger {
-  background: rgba(239, 68, 68, 0.07);
-  border: 1px solid rgba(239, 68, 68, 0.2);
-  color: #f87171;
-}
-
-.alert-success {
-  background: rgba(16, 185, 129, 0.07);
-  border: 1px solid rgba(16, 185, 129, 0.2);
-  color: #34d399;
-}
-
-/* ── Loading / Offline States ── */
-.loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 250px;
-  color: var(--text-secondary);
-  gap: 1rem;
-}
-
-.spinner {
-  width: 32px;
-  height: 32px;
-  border: 3px solid rgba(59, 130, 246, 0.1);
-  border-top-color: var(--blue);
-  border-radius: 50%;
-  animation: spin 1s cubic-bezier(0.55, 0.15, 0.45, 0.85) infinite;
-  box-shadow: 0 0 15px rgba(59, 130, 246, 0.2);
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-canvas {
-  width: 100% !important;
-  max-height: 300px;
-}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,-apple-system,sans-serif;min-height:100vh}
+  header{display:flex;justify-content:space-between;align-items:center;padding:20px 32px;border-bottom:1px solid var(--border);background:linear-gradient(90deg,#0b0f17,#101a2e)}
+  header h1{font-size:20px;letter-spacing:.5px}
+  header h1 span{color:var(--accent)}
+  .meta{color:var(--muted);font-size:13px;text-align:right}
+  .badge{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;background:#052e16;color:var(--good);border:1px solid #14532d;margin-left:8px}
+  main{max-width:1280px;margin:0 auto;padding:28px 24px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:24px}
+  .kpi{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px 20px}
+  .kpi .label{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:1px}
+  .kpi .value{font-size:28px;font-weight:600;margin-top:6px}
+  .kpi .sub{font-size:12px;color:var(--muted);margin-top:4px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:16px}
+  .card.full{grid-column:1/-1}
+  .card h2{font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:14px}
+  .chart-wrap{position:relative;height:300px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border)}
+  th{color:var(--muted);font-weight:500;text-transform:uppercase;font-size:11px;letter-spacing:1px}
+  tr:hover td{background:var(--panel2)}
+  .pill{padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600}
+  .pill.FAILURE_SPIKE{background:#450a0a;color:var(--bad)}
+  .pill.DEGRADATION_WAVE{background:#451a03;color:var(--warn)}
+  .pill.THERMAL_EVENT{background:#431407;color:#fb923c}
+  .pill.STATISTICAL_OUTLIER{background:#1e1b4b;color:var(--accent2)}
+  .risk-vals{display:flex;gap:28px;flex-wrap:wrap;margin-bottom:14px}
+  .risk-vals div b{display:block;font-size:24px}
+  .risk-vals div span{color:var(--muted);font-size:12px}
+  footer{color:var(--muted);text-align:center;font-size:12px;padding:24px}
+  #err{display:none;background:#450a0a;border:1px solid #7f1d1d;color:#fecaca;padding:16px 20px;border-radius:12px;margin-bottom:20px}
+  @media(max-width:900px){.grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
-
-<!-- Header -->
-<div class="header">
-  <div class="logo">
-    <div class="logo-icon">💾</div>
-    <div>
-      <div class="logo-text">StorageIQ</div>
-      <div class="logo-sub">Predictive Storage Analytics &amp; Risk Platform</div>
-    </div>
-  </div>
-  <div class="header-meta">
-    <div class="status-badge">
-      <span class="status-dot"></span> Live System
-    </div>
-    <div class="badge badge-primary">VIT–SanDisk Hackathon 2026</div>
-    <div class="badge badge-purple">Team StorageIQ</div>
-  </div>
-</div>
-
-<!-- Nav -->
-<nav>
-  <button class="nav-btn active" onclick="showTab('dashboard',this)">📊 Dashboard</button>
-  <button class="nav-btn" onclick="showTab('forecast',this)">📈 Forecast Projections</button>
-  <button class="nav-btn" onclick="showTab('alerts',this)">🚨 Threat &amp; Anomaly Center</button>
-  <button class="nav-btn" onclick="showTab('recs',this)">💡 Intelligent Action Center</button>
-</nav>
-
+<header>
+  <h1>⚡ Storage<span>IQ</span> — Stochastic Storage VaR<span class="badge" id="src">real telemetry</span></h1>
+  <div class="meta" id="meta">loading…</div>
+</header>
 <main>
+  <div id="err"></div>
+  <div class="kpis" id="kpis"></div>
 
-  <!-- ══ DASHBOARD TAB ══ -->
-  <div id="dashboard" class="section active">
-    <div class="metrics" id="metrics-row">
-      <div class="metric-card blue">
-        <div class="loading" style="height: auto;"><div class="spinner"></div><div style="font-size: 0.85rem;">Ingesting Storage Metrics...</div></div>
-      </div>
-    </div>
-    
-    <div class="grid3">
-      <div class="card">
-        <div class="card-title">📈 Capacity Growth &amp; Ensemble Forecast (30-Day)</div>
-        <div style="position: relative; width: 100%;">
-          <canvas id="forecastChart"></canvas>
-        </div>
-      </div>
-      <div class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
-        <div>
-          <div class="card-title">⚠️ Storage Overflow Risk Score</div>
-          <div class="gauge-wrap">
-            <div class="gauge-circle" id="gaugeCircle">
-              <div class="gauge-score" id="gaugeScore">–</div>
-              <div class="gauge-label" id="gaugeLabel">–</div>
-            </div>
-            <div class="gauge-detail-text" id="gaugeDetail"></div>
-          </div>
-        </div>
-        <div>
-          <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase; margin-bottom: 0.5rem; letter-spacing: 0.05em;">Monte Carlo Breach Curve</div>
-          <canvas id="riskChart" style="max-height:100px;"></canvas>
-        </div>
-      </div>
-    </div>
-    
+  <div class="card full">
+    <h2>Fleet Annualized Failure Rate — history & 30-day ensemble forecast</h2>
+    <div class="chart-wrap"><canvas id="afrChart"></canvas></div>
+  </div>
+
+  <div class="grid">
     <div class="card">
-      <div class="card-title">🔍 Recent Flagged Anomalies</div>
-      <div class="table-responsive" id="anomaly-summary">
-        <div class="loading" style="height: 100px;"><div class="spinner"></div></div>
+      <h2>Daily failures & fleet size</h2>
+      <div class="chart-wrap"><canvas id="failChart"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Monte Carlo — cumulative failures (10,000 paths, 90d)</h2>
+      <div class="risk-vals" id="riskVals"></div>
+      <div class="chart-wrap" style="height:220px"><canvas id="mcChart"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Anomalous days (Isolation Forest + 3σ)</h2>
+      <div style="max-height:300px;overflow:auto">
+        <table><thead><tr><th>Date</th><th>Type</th><th>Failures</th><th>Z-score</th></tr></thead>
+        <tbody id="anomBody"></tbody></table>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Drive models — annualized failure rate</h2>
+      <div style="max-height:300px;overflow:auto">
+        <table><thead><tr><th>Model</th><th>Drive-days</th><th>Failures</th><th>AFR %</th></tr></thead>
+        <tbody id="modelBody"></tbody></table>
       </div>
     </div>
   </div>
-
-  <!-- ══ FORECAST TAB ══ -->
-  <div id="forecast" class="section">
-    <div class="metrics" id="fc-metrics"></div>
-    <div class="card">
-      <div class="card-title">📈 Predictive Model Comparison (ARIMA vs LSTM vs Ensemble)</div>
-      <div style="position: relative; width: 100%;">
-        <canvas id="fcDetailChart"></canvas>
-      </div>
-    </div>
-  </div>
-
-  <!-- ══ ALERTS TAB ══ -->
-  <div id="alerts" class="section">
-    <div id="alert-banners"></div>
-    <div class="card">
-      <div class="card-title">🔍 Complete Anomaly Audit Log</div>
-      <div class="table-responsive">
-        <table>
-          <thead>
-            <tr>
-              <th>Timestamp</th>
-              <th>Capacity</th>
-              <th>Growth / Day</th>
-              <th>Risk Severity</th>
-              <th>Analyzed Threat Vectors</th>
-            </tr>
-          </thead>
-          <tbody id="anomaly-table">
-            <tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Awaiting telemetry data stream...</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <!-- ══ RECOMMENDATIONS TAB ══ -->
-  <div id="recs" class="section">
-    <div class="metrics" id="rec-metrics"></div>
-    <div class="card">
-      <div class="card-title">💡 Automated System Optimization Plan</div>
-      <div class="rec-grid" id="rec-cards">
-        <div class="loading" style="height: 100px;"><div class="spinner"></div></div>
-      </div>
-    </div>
-  </div>
-
 </main>
+<footer id="foot">StorageIQ · LSTM + ARIMA ensemble · Gamma-Poisson Monte Carlo · data: Backblaze Drive Stats</footer>
 
 <script>
-// ── State ──────────────────────────────────────────────────────────────────
-let FC={}, RS={}, AN={}, RC={};
-let fcChart=null, riskChart=null, fcDetailChart=null;
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+Chart.defaults.color = css('--muted');
+Chart.defaults.borderColor = css('--border');
+Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
 
-// ── Tab switching ─────────────────────────────────────────────────────────
-function showTab(id, btn) {
-  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
-  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
-  btn.classList.add('active');
-  
-  // Reflow charts when switching tabs to ensure proper rendering
-  setTimeout(() => {
-    if (id === 'forecast' && fcDetailChart) fcDetailChart.resize();
-    if (id === 'dashboard') {
-      if (fcChart) fcChart.resize();
-      if (riskChart) riskChart.resize();
-    }
-  }, 50);
-}
+const fmt = n => n >= 1e6 ? (n/1e6).toFixed(2)+'M' : n >= 1e3 ? (n/1e3).toFixed(1)+'k' : (+n).toLocaleString();
 
-// ── Fetch all data on load ────────────────────────────────────────────────
-async function fetchAll() {
-  try {
-    const host = window.location.origin;
-    [FC, RS, AN, RC] = await Promise.all([
-      fetch(`${host}/api/forecast`).then(r=>r.json()),
-      fetch(`${host}/api/risk-score`).then(r=>r.json()),
-      fetch(`${host}/api/anomalies`).then(r=>r.json()),
-      fetch(`${host}/api/recommend`).then(r=>r.json()),
-    ]);
-    renderDashboard();
-    renderForecastTab();
-    renderAlertsTab();
-    renderRecsTab();
-  } catch(e) {
-    console.error("API error", e);
-    const errHtml = `<div class="alert alert-danger" style="margin: 2rem;">
-      <strong>⚠️ Connection Failure:</strong> Could not connect to the StorageIQ API. Verify the FastAPI server is running (e.g. <code>uvicorn main:app --reload</code>) and the trained model artifacts are loaded in <code>models/</code>.
-    </div>`;
-    document.getElementById('metrics-row').innerHTML = errHtml;
-    document.getElementById('anomaly-summary').innerHTML = '';
-    document.getElementById('rec-cards').innerHTML = '';
+async function boot(){
+  let d;
+  try{
+    const r = await fetch('/api/data');
+    if(!r.ok) throw new Error((await r.json()).detail || r.statusText);
+    d = await r.json();
+  }catch(e){
+    const el = document.getElementById('err');
+    el.style.display='block';
+    el.textContent = '⚠ ' + e.message + ' — run `python StorageIQ_Pipeline.py` to generate analytics.';
+    return;
   }
+
+  document.getElementById('meta').innerHTML =
+    `${d.meta.start} → ${d.meta.end} · ${d.meta.days} days<br><span style="font-size:11px">${d.meta.source}</span>`;
+
+  // KPIs
+  const k = d.kpis;
+  const kpis = [
+    ['Fleet size', fmt(k.drives), 'drives reporting'],
+    ['Capacity', k.capacity_pb.toFixed(2)+' PB', 'raw capacity'],
+    ['Failures', fmt(k.failures_total), 'in observation window'],
+    ['AFR (7d)', k.afr_pct.toFixed(2)+'%', 'annualized failure rate'],
+    ['VaR₉₅', fmt(Math.round(d.risk.var95_failures)), `failures / ${d.risk.horizon_days}d`],
+    ['Anomaly days', k.anomaly_days, 'flagged by ensemble'],
+  ];
+  document.getElementById('kpis').innerHTML = kpis.map(([l,v,s]) =>
+    `<div class="kpi"><div class="label">${l}</div><div class="value">${v}</div><div class="sub">${s}</div></div>`).join('');
+
+  // AFR history + forecast
+  const labels = [...d.series.dates, ...d.forecast.dates];
+  const hist = d.series.afr_7d, fc = d.forecast.afr_pct;
+  new Chart(afrChart, {type:'line', data:{labels,
+    datasets:[
+      {label:'AFR % (7d avg)', data:hist, borderColor:css('--accent'), backgroundColor:'rgba(56,189,248,.08)', fill:true, pointRadius:0, borderWidth:2},
+      {label:'Forecast', data:[...Array(hist.length-1).fill(null), hist[hist.length-1], ...fc], borderColor:css('--accent2'), borderDash:[6,4], pointRadius:0, borderWidth:2},
+    ]},
+    options:{maintainAspectRatio:false, interaction:{mode:'index',intersect:false},
+      scales:{x:{ticks:{maxTicksLimit:10}}, y:{title:{display:true,text:'AFR %'}}}}});
+
+  // failures + fleet size
+  new Chart(failChart, {data:{labels:d.series.dates, datasets:[
+      {type:'bar', label:'Daily failures', data:d.series.failures, backgroundColor:'rgba(248,113,113,.55)', yAxisID:'y'},
+      {type:'line', label:'Fleet size', data:d.series.drive_count, borderColor:css('--good'), pointRadius:0, borderWidth:2, yAxisID:'y1'},
+    ]},
+    options:{maintainAspectRatio:false, interaction:{mode:'index',intersect:false},
+      scales:{x:{ticks:{maxTicksLimit:8}}, y:{title:{display:true,text:'failures'}},
+              y1:{position:'right', grid:{drawOnChartArea:false}, title:{display:true,text:'drives'}}}}});
+
+  // Monte Carlo fan
+  const q = d.risk.cum_quantiles, days = q.p50.map((_,i)=>i+1);
+  document.getElementById('riskVals').innerHTML = `
+    <div><b>${fmt(Math.round(d.risk.expected_failures))}</b><span>expected failures</span></div>
+    <div><b style="color:var(--warn)">${fmt(Math.round(d.risk.var95_failures))}</b><span>VaR₉₅</span></div>
+    <div><b style="color:var(--bad)">${fmt(Math.round(d.risk.cvar95_failures))}</b><span>CVaR₉₅ (tail mean)</span></div>`;
+  new Chart(mcChart, {type:'line', data:{labels:days, datasets:[
+      {label:'p95', data:q.p95, borderColor:'transparent', backgroundColor:'rgba(248,113,113,.15)', fill:'+1', pointRadius:0},
+      {label:'median', data:q.p50, borderColor:css('--accent'), borderWidth:2, pointRadius:0},
+      {label:'p05', data:q.p05, borderColor:'transparent', backgroundColor:'rgba(248,113,113,.15)', fill:'-1', pointRadius:0},
+    ]},
+    options:{maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales:{x:{title:{display:true,text:'days ahead'},ticks:{maxTicksLimit:9}}, y:{title:{display:true,text:'cumulative failures'}}}}});
+
+  // anomalies table
+  document.getElementById('anomBody').innerHTML = (d.anomalies.length ? d.anomalies : []).map(a =>
+    `<tr><td>${a.date}</td><td><span class="pill ${a.type}">${a.type.replace('_',' ')}</span></td><td>${a.failures}</td><td>${a.z}</td></tr>`
+  ).join('') || '<tr><td colspan="4" style="color:var(--muted)">no anomalies flagged</td></tr>';
+
+  // model table
+  document.getElementById('modelBody').innerHTML = (d.drive_models||[]).map(m =>
+    `<tr><td>${m.Model}</td><td>${fmt(m.Drive_Days)}</td><td>${m.Failures}</td>
+     <td style="color:${m.AFR_Pct>2?'var(--bad)':m.AFR_Pct>1?'var(--warn)':'var(--good)'}">${m.AFR_Pct.toFixed(2)}</td></tr>`
+  ).join('') || '<tr><td colspan="4" style="color:var(--muted)">run the loader with model stats</td></tr>';
 }
-
-// ── Dashboard ─────────────────────────────────────────────────────────────
-function renderDashboard() {
-  const s = FC.summary; const r = RS;
-  const riskColor = r.color;
-
-  // Chart theme configurations
-  Chart.defaults.color = '#94a3b8';
-  Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.06)';
-  Chart.defaults.font.family = "'Plus Jakarta Sans', sans-serif";
-
-  // Metrics
-  document.getElementById('metrics-row').innerHTML = `
-    <div class="metric-card blue">
-      <div class="metric-label">Current Capacity</div>
-      <div class="metric-value" style="color:#60a5fa">${s.current_gb} <span style="font-size:1.1rem; font-weight: 500; color:var(--text-secondary)">GB</span></div>
-      <div class="metric-sub">of 2,000 GB (${(s.current_gb/2000*100).toFixed(1)}% occupied)</div>
-    </div>
-    <div class="metric-card green">
-      <div class="metric-label">30-Day Forecast</div>
-      <div class="metric-value" style="color:#34d399">${s.forecast_30d} <span style="font-size:1.1rem; font-weight: 500; color:var(--text-secondary)">GB</span></div>
-      <div class="metric-sub">${s.util_pct_30d}% util projected in 30 days</div>
-    </div>
-    <div class="metric-card ${r.risk_label==='HIGH'?'red':r.risk_label==='MEDIUM'?'yellow':'green'}">
-      <div class="metric-label">Overflow Risk</div>
-      <div class="metric-value" style="color:${riskColor}">${r.risk_score_pct}<span style="font-size:1.1rem; font-weight: 500;">%</span></div>
-      <div class="metric-sub">${r.risk_label} probability in 30 days</div>
-    </div>
-    <div class="metric-card purple">
-      <div class="metric-label">Flagged Anomalies</div>
-      <div class="metric-value" style="color:#c084fc">${AN.total}</div>
-      <div class="metric-sub">${(AN.severity_counts||{}).HIGH||0} high severity threats detected</div>
-    </div>
-    <div class="metric-card cyan">
-      <div class="metric-label">Headroom (VaR-95)</div>
-      <div class="metric-value" style="color:#22d3ee">${r.headroom_gb} <span style="font-size:1.1rem; font-weight: 500; color:var(--text-secondary)">GB</span></div>
-      <div class="metric-sub">Worst Case Load: ${r.var_95_gb} GB</div>
-    </div>
-  `;
-
-  // Forecast chart
-  const labels = [...FC.historical.map(h=>h.Timestamp), ...FC.forecast_dates];
-  const histData = [...FC.historical.map(h=>h.Capacity_GB), ...new Array(30).fill(null)];
-  const fcData   = [...new Array(FC.historical.length-1).fill(null), FC.historical.at(-1).Capacity_GB, ...FC.ensemble_forecast];
-  
-  if(fcChart) fcChart.destroy();
-  
-  const ctx = document.getElementById('forecastChart').getContext('2d');
-  const gradientHist = ctx.createLinearGradient(0, 0, 0, 300);
-  gradientHist.addColorStop(0, 'rgba(59, 130, 246, 0.15)');
-  gradientHist.addColorStop(1, 'rgba(59, 130, 246, 0)');
-  
-  const gradientFc = ctx.createLinearGradient(0, 0, 0, 300);
-  gradientFc.addColorStop(0, 'rgba(16, 185, 129, 0.15)');
-  gradientFc.addColorStop(1, 'rgba(16, 185, 129, 0)');
-
-  fcChart = new Chart(ctx, {
-    type: 'line', 
-    data: {
-      labels,
-      datasets: [
-        {
-          label: 'Historical Capacity',
-          data: histData,
-          borderColor: '#3b82f6',
-          borderWidth: 2,
-          pointRadius: 0,
-          fill: true,
-          backgroundColor: gradientHist,
-          tension: 0.2
-        },
-        {
-          label: 'Predictive Ensemble Forecast',
-          data: fcData,
-          borderColor: '#10b981',
-          borderWidth: 2.5,
-          borderDash: [6, 4],
-          pointRadius: 0,
-          fill: true,
-          backgroundColor: gradientFc,
-          tension: 0.2
-        },
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { intersect: false, mode: 'index' },
-      plugins: {
-        legend: {
-          display: true,
-          position: 'top',
-          labels: { color: '#94a3b8', font: { size: 12, weight: '600' } }
-        }
-      },
-      scales: {
-        x: {
-          ticks: { color: '#64748b', maxTicksLimit: 10, font: { size: 10 } },
-          grid: { color: 'rgba(255, 255, 255, 0.03)' }
-        },
-        y: {
-          ticks: { color: '#64748b', font: { size: 10 } },
-          grid: { color: 'rgba(255, 255, 255, 0.05)' }
-        }
-      }
-    }
-  });
-
-  // Risk gauge
-  const gc = document.getElementById('gaugeCircle');
-  gc.style.borderColor = riskColor;
-  gc.style.boxShadow = `0 0 25px ${riskColor}33, inset 0 0 15px ${riskColor}15`;
-  
-  document.getElementById('gaugeScore').textContent = r.risk_score_pct+'%';
-  document.getElementById('gaugeScore').style.color = riskColor;
-  document.getElementById('gaugeLabel').textContent = r.risk_label;
-  document.getElementById('gaugeLabel').style.color = riskColor;
-  document.getElementById('gaugeDetail').textContent = `Ensemble risk projects a ${r.risk_score_pct}% chance of overflow. Room for ${r.headroom_gb} GB remaining.`;
-
-  // Mini risk chart
-  if(riskChart) riskChart.destroy();
-  const rCtx = document.getElementById('riskChart').getContext('2d');
-  const rGrad = rCtx.createLinearGradient(0, 0, 0, 100);
-  rGrad.addColorStop(0, riskColor + '33');
-  rGrad.addColorStop(1, riskColor + '00');
-  
-  riskChart = new Chart(rCtx, {
-    type: 'line', 
-    data: {
-      labels: Array.from({length:30},(_,i)=>`Day ${i+1}`),
-      datasets: [{
-        label: 'Cumulative Probability %',
-        data: RS.daily_breach_pct,
-        borderColor: riskColor,
-        backgroundColor: rGrad,
-        fill: true,
-        borderWidth: 1.5,
-        pointRadius: 0,
-        tension: 0.3
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { ticks: { color: '#475569', maxTicksLimit: 6, font: { size: 9 } }, grid: { display: false } },
-        y: { ticks: { color: '#475569', maxTicksLimit: 4, font: { size: 9 } }, grid: { color: 'rgba(255, 255, 255, 0.03)' }, max: 100, min: 0 }
-      }
-    }
-  });
-
-  // Anomaly summary
-  const anRows = (AN.anomalies||[]).slice(0, 5).map(a=>`
-    <tr>
-      <td style="font-weight: 600;">${a.date}</td>
-      <td>${a.capacity_gb} GB</td>
-      <td style="color:${a.daily_growth>15?'#f87171':'#34d399'}; font-weight:600;">+${a.daily_growth} GB</td>
-      <td><span class="sev sev-${a.severity}">${a.severity}</span></td>
-      <td style="font-weight: 500; font-size: 0.8rem;">${a.threat}</td>
-    </tr>
-  `).join('');
-  
-  document.getElementById('anomaly-summary').innerHTML = `
-    <table>
-      <thead>
-        <tr>
-          <th>Timestamp</th>
-          <th>Capacity GB</th>
-          <th>Growth / Day</th>
-          <th>Severity</th>
-          <th>Behavior Analysis</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${anRows || '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">No telemetry anomalies detected in latest epoch.</td></tr>'}
-      </tbody>
-    </table>`;
-}
-
-// ── Forecast Tab ──────────────────────────────────────────────────────────
-function renderForecastTab() {
-  const s = FC.summary;
-  document.getElementById('fc-metrics').innerHTML = `
-    <div class="metric-card blue">
-      <div class="metric-label">7-Day Capacity projection</div>
-      <div class="metric-value" style="color:#60a5fa">${s.forecast_7d} <span style="font-size:1.1rem; font-weight:500;">GB</span></div>
-      <div class="metric-sub">${(s.forecast_7d/2000*100).toFixed(1)}% system capacity occupied</div>
-    </div>
-    <div class="metric-card purple">
-      <div class="metric-label">14-Day Capacity projection</div>
-      <div class="metric-value" style="color:#c084fc">${s.forecast_14d} <span style="font-size:1.1rem; font-weight:500;">GB</span></div>
-      <div class="metric-sub">${(s.forecast_14d/2000*100).toFixed(1)}% system capacity occupied</div>
-    </div>
-    <div class="metric-card green">
-      <div class="metric-label">30-Day Capacity projection</div>
-      <div class="metric-value" style="color:#34d399">${s.forecast_30d} <span style="font-size:1.1rem; font-weight:500;">GB</span></div>
-      <div class="metric-sub">${s.util_pct_30d}% system capacity occupied</div>
-    </div>
-  `;
-  
-  const labels = [...FC.historical.map(h=>h.Timestamp), ...FC.forecast_dates];
-  const hist   = [...FC.historical.map(h=>h.Capacity_GB), ...new Array(30).fill(null)];
-  const arima  = [...new Array(FC.historical.length-1).fill(null), FC.historical.at(-1).Capacity_GB, ...FC.arima_forecast];
-  const lstmF  = [...new Array(FC.historical.length-1).fill(null), FC.historical.at(-1).Capacity_GB, ...FC.lstm_forecast];
-  const ensF   = [...new Array(FC.historical.length-1).fill(null), FC.historical.at(-1).Capacity_GB, ...FC.ensemble_forecast];
-  
-  if(fcDetailChart) fcDetailChart.destroy();
-  
-  const ctx = document.getElementById('fcDetailChart').getContext('2d');
-  
-  fcDetailChart = new Chart(ctx, {
-    type: 'line', 
-    data: {
-      labels, 
-      datasets: [
-        {
-          label: 'Historical Data',
-          data: hist,
-          borderColor: '#64748b',
-          borderWidth: 1.5,
-          pointRadius: 0,
-          fill: false,
-          tension: 0.2
-        },
-        {
-          label: 'Statistical (ARIMA) Model',
-          borderColor: '#ef4444',
-          borderWidth: 1.5,
-          borderDash: [5, 5],
-          data: arima,
-          pointRadius: 0,
-          fill: false,
-          tension: 0.1
-        },
-        {
-          label: 'Deep Learning (LSTM) Model',
-          borderColor: '#fbbf24',
-          borderWidth: 1.5,
-          borderDash: [5, 5],
-          data: lstmF,
-          pointRadius: 0,
-          fill: false,
-          tension: 0.1
-        },
-        {
-          label: 'StorageIQ Hybrid Ensemble',
-          borderColor: '#10b981',
-          borderWidth: 3,
-          data: ensF,
-          pointRadius: 0,
-          fill: false,
-          tension: 0.2,
-          shadowColor: 'rgba(16, 185, 129, 0.4)',
-          shadowBlur: 10
-        },
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { intersect: false, mode: 'index' },
-      plugins: {
-        legend: { labels: { color: '#94a3b8', font: { size: 12 } } }
-      },
-      scales: {
-        x: { ticks: { color: '#64748b', maxTicksLimit: 12 }, grid: { color: 'rgba(255, 255, 255, 0.03)' } },
-        y: { ticks: { color: '#64748b' }, grid: { color: 'rgba(255, 255, 255, 0.05)' } }
-      }
-    }
-  });
-}
-
-// ── Alerts Tab ────────────────────────────────────────────────────────────
-function renderAlertsTab() {
-  const sc = AN.severity_counts || {};
-  const banners = [];
-  
-  if((sc.HIGH||0)>0) {
-    banners.push(`<div class="alert alert-danger">
-      <span style="font-size: 1.25rem;">🚨</span>
-      <div>
-        <strong>Critical Condition Warning:</strong> ${sc.HIGH} HIGH severity anomalous indicators detected. Elevated disk activity patterns match potential threat signatures.
-      </div>
-    </div>`);
-  }
-  if((sc.MEDIUM||0)>0) {
-    banners.push(`<div class="alert alert-warn">
-      <span style="font-size: 1.25rem;">⚠️</span>
-      <div>
-        <strong>Advisory:</strong> ${sc.MEDIUM} MEDIUM severity anomalies logged. System write/delete transactions are fluctuating beyond standard bounds.
-      </div>
-    </div>`);
-  }
-  if(!banners.length) {
-    banners.push(`<div class="alert alert-success">
-      <span style="font-size: 1.25rem;">✨</span>
-      <div>
-        <strong>System Healthy:</strong> Zero abnormal write, latency, or exfiltration indicators detected in the current telemetry window.
-      </div>
-    </div>`);
-  }
-  
-  document.getElementById('alert-banners').innerHTML = banners.join('');
-  
-  const rows = (AN.anomalies||[]).map(a=>`
-    <tr>
-      <td style="font-weight: 600;">${a.date}</td>
-      <td>${a.capacity_gb} GB</td>
-      <td style="color:${a.daily_growth>15?'#f87171':'#34d399'}; font-weight:600;">+${a.daily_growth} GB</td>
-      <td><span class="sev sev-${a.severity}">${a.severity}</span></td>
-      <td style="font-weight: 500;">${a.threat}</td>
-    </tr>
-  `).join('');
-  
-  document.getElementById('anomaly-table').innerHTML = rows || `
-    <tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 3rem;">No anomaly reports in archive.</td></tr>
-  `;
-}
-
-// ── Recommendations Tab ───────────────────────────────────────────────────
-function renderRecsTab() {
-  const m = RC.summary_metrics||{};
-  document.getElementById('rec-metrics').innerHTML = `
-    <div class="metric-card red">
-      <div class="metric-label">Calculated Risk</div>
-      <div class="metric-value" style="color:#f87171">${m.risk||'–'}%</div>
-      <div class="metric-sub">Max probability score</div>
-    </div>
-    <div class="metric-card blue">
-      <div class="metric-label">30d Projection</div>
-      <div class="metric-value" style="color:#60a5fa">${m.forecast_30d||'–'} <span style="font-size:0.9rem">GB</span></div>
-      <div class="metric-sub">${m.util_pct||'–'}% system usage</div>
-    </div>
-    <div class="metric-card purple">
-      <div class="metric-label">Total Anomalies</div>
-      <div class="metric-value" style="color:#c084fc">${m.anomalies||'–'}</div>
-      <div class="metric-sub">Telemetry anomalies flagged</div>
-    </div>
-    <div class="metric-card green">
-      <div class="metric-label">Recommended Actions</div>
-      <div class="metric-value" style="color:#34d399">${RC.total||'–'}</div>
-      <div class="metric-sub">Decisions queued</div>
-    </div>
-  `;
-  
-  document.getElementById('rec-cards').innerHTML = (RC.recommendations||[]).map(r=>`
-    <div class="rec-card" style="background:${r.color}08; border-left-color:${r.color}">
-      <div class="rec-icon" style="color:${r.color}">${r.icon}</div>
-      <div class="rec-body">
-        <div class="rec-priority" style="color:${r.color}">${r.priority} Priority &bull; ${r.category}</div>
-        <div class="rec-action">${r.action}</div>
-        <div class="rec-meta">
-          <span>📉 <strong>Recoverable Volume:</strong> ${r.space}</span>
-          <span>🤖 <strong>Recommendation Confidence:</strong> ${r.confidence}</span>
-        </div>
-      </div>
-    </div>
-  `).join('');
-}
-
-// ── Init ──────────────────────────────────────────────────────────────────
-fetchAll();
+boot();
 </script>
 </body>
 </html>
