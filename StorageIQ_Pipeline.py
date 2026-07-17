@@ -44,6 +44,8 @@ except ImportError:
 
 warnings.filterwarnings("ignore")
 np.random.seed(42)
+if HAS_TORCH:
+    torch.manual_seed(42)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA_CSV = os.path.join(HERE, "data", "fleet_daily.csv")
@@ -110,8 +112,10 @@ def detect_anomalies(df: pd.DataFrame):
     feat_cols = [c for c in df.columns if c.startswith("Z_")]
     X = df[feat_cols].values
     iso = IsolationForest(n_estimators=200, contamination=0.03, random_state=42)
-    df["Anomaly_Score"] = -iso.fit_predict(X)  # 1 anomalous ↔ -1 normal → 2/0
-    df["Is_Anomaly"] = (df["Anomaly_Score"] > 1) | (df["Z_Failures"].abs() > 3)
+    if_flag = iso.fit_predict(X) == -1
+    # continuous score: higher = more anomalous (sign-flipped decision_function)
+    df["Anomaly_Score"] = -iso.decision_function(X)
+    df["Is_Anomaly"] = if_flag | (df["Z_Failures"].abs() > 3)
 
     def classify(r):
         if not r["Is_Anomaly"]:
@@ -193,26 +197,102 @@ def lstm_forecast(model, series, scaler, horizon=HORIZON):
     return scaler.inverse_transform(np.array(preds).reshape(-1, 1)).flatten()
 
 
-def arima_forecast(series: np.ndarray, horizon=HORIZON):
-    model = ARIMA(series, order=(2, 1, 2)).fit()
+def select_arima_order(series: np.ndarray) -> tuple:
+    """Pick (p,1,q) by AIC on a small grid — cheap and honest for short series."""
+    best, best_aic = (1, 1, 1), np.inf
+    for p in range(3):
+        for q in range(3):
+            try:
+                aic = ARIMA(series, order=(p, 1, q)).fit().aic
+                if aic < best_aic:
+                    best, best_aic = (p, 1, q), aic
+            except Exception:
+                continue
+    return best
+
+
+def arima_forecast(series: np.ndarray, horizon=HORIZON, order=None):
+    order = order or select_arima_order(series)
+    model = ARIMA(series, order=order).fit()
     return model, np.asarray(model.forecast(horizon))
+
+
+# ── Baselines: any learned model must beat these to earn its keep ──
+def naive_forecast(series: np.ndarray, horizon=HORIZON):
+    return np.full(horizon, series[-1])
+
+
+def seasonal_naive_forecast(series: np.ndarray, horizon=HORIZON, m=7):
+    reps = int(np.ceil(horizon / m))
+    return np.tile(series[-m:], reps)[:horizon]
+
+
+def ets_forecast(series: np.ndarray, horizon=HORIZON):
+    from statsmodels.tsa.holtwinters import ExponentialSmoothing
+    fit = ExponentialSmoothing(series, trend="add", damped_trend=True).fit()
+    return np.asarray(fit.forecast(horizon))
+
+
+def mase(y_true, y_pred, insample, m=7):
+    """Mean Absolute Scaled Error vs the in-sample seasonal-naive forecast."""
+    scale = np.mean(np.abs(insample[m:] - insample[:-m]))
+    return float(np.mean(np.abs(y_true - y_pred)) / max(scale, 1e-12))
+
+
+def walk_forward(series: np.ndarray, fc_fn, horizon=7, min_train=60, step=7):
+    """Rolling-origin evaluation: expanding train window, MAE per fold."""
+    maes = []
+    for cut in range(min_train, len(series) - horizon + 1, step):
+        pred = fc_fn(series[:cut], horizon)
+        maes.append(mean_absolute_error(series[cut:cut + horizon], pred))
+    return maes
 
 
 def forecast(df: pd.DataFrame):
     series = df[TARGET].values.astype(float)
-    scaler = MinMaxScaler().fit(series.reshape(-1, 1))
 
-    # Hold-out validation on last HORIZON days
+    # ── Hold-out validation on last HORIZON days (all models, no leakage) ──
     train, test = series[:-HORIZON], series[-HORIZON:]
-    _, arima_val = arima_forecast(train)
-    val = {"arima_mae": float(mean_absolute_error(test, arima_val)),
-           "arima_rmse": float(np.sqrt(mean_squared_error(test, arima_val)))}
+    scaler = MinMaxScaler().fit(train.reshape(-1, 1))  # fit on train only
 
-    lstm_model = train_lstm(series, scaler)
+    candidates = {
+        "naive": naive_forecast(train),
+        "seasonal_naive": seasonal_naive_forecast(train),
+        "ets": ets_forecast(train),
+    }
+    order = select_arima_order(train)
+    _, candidates["arima"] = arima_forecast(train, order=order)
+
+    lstm_model = train_lstm(train, scaler)  # train window only — test never seen
     if lstm_model is not None:
-        lstm_val = lstm_forecast(lstm_model, train, scaler)
-        val["lstm_mae"] = float(mean_absolute_error(test, lstm_val))
-        # inverse-MAE weighting
+        candidates["lstm"] = lstm_forecast(lstm_model, train, scaler)
+
+    val = {"arima_order": list(order)}
+    for name, pred in candidates.items():
+        val[f"{name}_mae"] = float(mean_absolute_error(test, pred))
+        val[f"{name}_mase"] = mase(test, pred, train)
+    val["arima_rmse"] = float(np.sqrt(mean_squared_error(test, candidates["arima"])))
+
+    # ── Walk-forward CV (rolling origin) for split-independent comparison ──
+    min_train = max(WINDOW * 2, int(len(series) * 0.6))
+    wf_fns = {
+        "naive": naive_forecast,
+        "seasonal_naive": seasonal_naive_forecast,
+        "ets": ets_forecast,
+        "arima": lambda s, h: arima_forecast(s, h, order=order)[1],
+    }
+    val["walk_forward"] = {}
+    for name, fn in wf_fns.items():
+        maes = walk_forward(series, fn, min_train=min_train)
+        if maes:
+            val["walk_forward"][name] = {
+                "folds": len(maes),
+                "mae_mean": float(np.mean(maes)),
+                "mae_std": float(np.std(maes)),
+            }
+
+    # ── Ensemble weight from clean validation MAEs ──
+    if lstm_model is not None:
         w_l = 1 / max(val["lstm_mae"], 1e-12)
         w_a = 1 / max(val["arima_mae"], 1e-12)
         w_lstm = w_l / (w_l + w_a)
@@ -220,22 +300,32 @@ def forecast(df: pd.DataFrame):
         w_lstm = 0.0
     val["lstm_weight"] = round(w_lstm, 3)
 
-    arima_full, arima_fc = arima_forecast(series)
+    # ── Final forecast: refit on full history with frozen hyperparameters ──
+    full_scaler = MinMaxScaler().fit(series.reshape(-1, 1))
+    arima_full, arima_fc = arima_forecast(series, order=order)
     if lstm_model is not None:
-        lstm_fc = lstm_forecast(lstm_model, series, scaler)
+        lstm_full = train_lstm(series, full_scaler)
+        lstm_fc = lstm_forecast(lstm_full, series, full_scaler)
         fc = w_lstm * lstm_fc + (1 - w_lstm) * arima_fc
     else:
         fc = arima_fc
     fc = np.clip(fc, 0, None)
 
     mode = f"LSTM+ARIMA (w_lstm={w_lstm:.2f})" if lstm_model is not None else "ARIMA only"
-    print(f"✔ Forecast ({mode}): ARIMA MAE={val['arima_mae']:.3e}"
-          + (f", LSTM MAE={val['lstm_mae']:.3e}" if "lstm_mae" in val else ""))
+    print(f"✔ Forecast ({mode}, ARIMA{order}):")
+    for name in candidates:
+        print(f"    {name:15s} MAE={val[f'{name}_mae']:.3e}  MASE={val[f'{name}_mase']:.2f}")
+    wf = val["walk_forward"]
+    if wf:
+        best_wf = min(wf, key=lambda k: wf[k]["mae_mean"])
+        print(f"    walk-forward best: {best_wf} "
+              f"(MAE {wf[best_wf]['mae_mean']:.3e} ± {wf[best_wf]['mae_std']:.1e}, "
+              f"{wf[best_wf]['folds']} folds)")
 
-    joblib.dump(scaler, os.path.join(MODELS_DIR, "scaler.pkl"))
+    joblib.dump(full_scaler, os.path.join(MODELS_DIR, "scaler.pkl"))
     joblib.dump(arima_full, os.path.join(MODELS_DIR, "arima_model.pkl"))
     if lstm_model is not None:
-        torch.save(lstm_model.state_dict(), os.path.join(MODELS_DIR, "lstm_model.pt"))
+        torch.save(lstm_full.state_dict(), os.path.join(MODELS_DIR, "lstm_model.pt"))
     return fc, val
 
 
