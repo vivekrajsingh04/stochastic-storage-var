@@ -6,9 +6,10 @@ scikit-learn>=1.5
 statsmodels>=0.14
 joblib>=1.4
 
-# Dashboard
+# Dashboard (pandas/numpy/statsmodels also power POST /api/analyze)
 fastapi>=0.115
 uvicorn[standard]>=0.30
+python-multipart>=0.0.9
 
 # Optional: LSTM forecasting (pipeline falls back to ARIMA without it)
 # torch>=2.3

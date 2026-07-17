@@ -4,7 +4,7 @@ services:
     env: python
     plan: free
     rootDir: StorageIQ_Dashboard
-    buildCommand: pip install fastapi "uvicorn[standard]"
+    buildCommand: pip install fastapi "uvicorn[standard]" python-multipart pandas numpy statsmodels
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION

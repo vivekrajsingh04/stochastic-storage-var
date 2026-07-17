@@ -142,6 +142,17 @@
   footer a{color:var(--dim);text-decoration:none;border-bottom:1px solid var(--line)}
   footer a:hover{color:var(--teal)}
 
+  /* ── upload zone ── */
+  .upload-zone{border:1px dashed rgba(94,234,212,.3);border-radius:2px;padding:34px 20px;
+               text-align:center;cursor:pointer;transition:all .25s;background:rgba(94,234,212,.02)}
+  .upload-zone:hover,.upload-zone.drag{border-color:var(--teal);background:var(--teal-dim)}
+  .up-title{font-size:15px;color:var(--ink)}
+  .up-title u{color:var(--teal);text-decoration-thickness:1px;text-underline-offset:3px}
+  .up-schema{margin-top:10px;font-family:var(--mono);font-size:11px;color:var(--faint)}
+  .up-schema code{color:var(--dim);background:rgba(139,149,163,.1);padding:1px 6px;border-radius:2px}
+  #upStatus{margin-top:14px;font-family:var(--mono);font-size:12px;line-height:1.6}
+  #upStatus.ok{color:var(--green)} #upStatus.err{color:var(--red)} #upStatus.busy{color:var(--amber)}
+
   #err{display:none;margin:120px auto 0;max-width:640px;background:rgba(251,113,133,.06);
        border:1px solid rgba(251,113,133,.25);color:var(--red);padding:22px 26px;
        font-family:var(--mono);font-size:13px;line-height:1.7;border-radius:2px}
@@ -177,6 +188,7 @@
     <a href="#validation">Validation</a>
     <a href="#risk">Risk</a>
     <a href="#fleet">Fleet</a>
+    <a href="#analyze">Analyze</a>
   </div>
 </nav>
 
@@ -287,9 +299,31 @@
     </div>
   </section>
 
+  <section id="analyze" class="wrap">
+    <div class="sec-head reveal">
+      <span class="sec-num">06</span><h2>Analyze your fleet</h2>
+      <p>same engine, your data — nothing is stored, processed in memory</p>
+    </div>
+    <div class="card reveal">
+      <h3>Upload daily fleet telemetry — CSV</h3>
+      <div class="upload-zone" id="upZone">
+        <input type="file" id="upFile" accept=".csv" hidden>
+        <div class="up-inner">
+          <div class="up-title">Drop a CSV here or <u>browse</u></div>
+          <div class="up-schema">required columns: <code>Timestamp</code> · <code>Drive_Count</code> · <code>Failures</code> — one row per day, ≥60 days, ≤2 MB</div>
+        </div>
+      </div>
+      <div id="upStatus"></div>
+      <div id="upResult" style="display:none">
+        <div class="risk-stats" id="upKpis" style="grid-template-columns:repeat(4,1fr);margin-top:20px"></div>
+        <div class="chart-wrap sm" style="margin-top:16px"><canvas id="upChart"></canvas></div>
+      </div>
+    </div>
+  </section>
+
   <section class="wrap">
     <div class="sec-head reveal">
-      <span class="sec-num">06</span><h2>Method</h2>
+      <span class="sec-num">07</span><h2>Method</h2>
       <p>what this system actually does — and what it doesn't claim</p>
     </div>
     <div class="method">
@@ -514,6 +548,65 @@ async function boot(){
   ).join('') || '<tr><td colspan="4" style="color:var(--faint)">run the loader for model stats</td></tr>';
 
   animate();
+  wireUpload();
+}
+
+/* ═══ bring-your-own-fleet upload ═══ */
+let upChartInst = null;
+function wireUpload(){
+  const zone = document.getElementById('upZone');
+  const input = document.getElementById('upFile');
+  const status = document.getElementById('upStatus');
+
+  zone.addEventListener('click', ()=> input.click());
+  ['dragover','dragenter'].forEach(ev => zone.addEventListener(ev, e=>{
+    e.preventDefault(); zone.classList.add('drag');
+  }));
+  ['dragleave','drop'].forEach(ev => zone.addEventListener(ev, e=>{
+    e.preventDefault(); zone.classList.remove('drag');
+  }));
+  zone.addEventListener('drop', e=> e.dataTransfer.files[0] && analyzeFile(e.dataTransfer.files[0]));
+  input.addEventListener('change', ()=> input.files[0] && analyzeFile(input.files[0]));
+
+  async function analyzeFile(f){
+    status.className = 'busy';
+    status.textContent = `analyzing ${f.name} — ARIMA + 4,000 Monte Carlo paths…`;
+    document.getElementById('upResult').style.display = 'none';
+    const fd = new FormData();
+    fd.append('file', f);
+    let d;
+    try{
+      const r = await fetch('/api/analyze', {method:'POST', body:fd});
+      d = await r.json();
+      if(!r.ok) throw new Error(d.detail || r.statusText);
+    }catch(e){
+      status.className = 'err';
+      status.textContent = '✕ ' + e.message;
+      return;
+    }
+    status.className = 'ok';
+    status.textContent = `✓ ${d.kpis.days} days · ${fmt(d.kpis.drives)} drives · ARIMA(${d.forecast.arima_order.join(',')})`;
+
+    document.getElementById('upKpis').innerHTML = `
+      <div><b>${d.kpis.afr_pct.toFixed(2)}<span style="font-size:14px">%</span></b><span>current AFR</span></div>
+      <div><b>${fmt(Math.round(d.risk.expected_failures))}</b><span>expected / ${d.risk.horizon_days}d</span></div>
+      <div class="var"><b>${fmt(Math.round(d.risk.var95_failures))}</b><span>VaR₉₅</span></div>
+      <div class="cvar"><b>${fmt(Math.round(d.risk.cvar95_failures))}</b><span>CVaR₉₅</span></div>`;
+
+    const hist = d.series.afr_7d;
+    const fcLine = [...Array(Math.max(hist.length-1,0)).fill(null), hist[hist.length-1], ...d.forecast.afr_pct];
+    if (upChartInst) upChartInst.destroy();
+    upChartInst = new Chart(document.getElementById('upChart'), {type:'line',
+      data:{labels:[...d.series.dates, ...d.forecast.dates], datasets:[
+        {label:'AFR % (7d)', data:hist, borderColor:css('--teal'),
+         backgroundColor:'rgba(94,234,212,.05)', fill:true, pointRadius:0, borderWidth:1.6, tension:.25},
+        {label:'forecast', data:fcLine, borderColor:css('--violet'),
+         borderDash:[5,4], pointRadius:0, borderWidth:1.6, tension:.25},
+      ]},
+      options:{maintainAspectRatio:false, interaction:{mode:'index',intersect:false},
+        scales:{x:{ticks:{maxTicksLimit:8,maxRotation:0}}, y:{title:{display:true,text:'AFR %'}}}}});
+    document.getElementById('upResult').style.display = 'block';
+  }
 }
 
 /* ═══ GSAP entrances ═══ */
