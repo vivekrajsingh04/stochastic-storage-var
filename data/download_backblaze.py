@@ -16,6 +16,8 @@ Raw schema (one CSV per day inside each quarterly ZIP):
 Usage:
     python data/download_backblaze.py --quarter Q1_2025
     python data/download_backblaze.py --quarter Q4_2024 --keep-raw
+    # multiple quarters aggregate into one continuous series:
+    python data/download_backblaze.py --quarter Q2_2024,Q3_2024,Q4_2024,Q1_2025
     # or aggregate a folder of daily CSVs you already extracted:
     python data/download_backblaze.py --raw-dir /path/to/extracted
 
@@ -50,30 +52,46 @@ SMART_COLS = {
 BASE_COLS = ["date", "serial_number", "model", "capacity_bytes", "failure"]
 
 
-def download(quarter: str, dest: str) -> str:
-    """Stream the quarterly ZIP to disk with a progress indicator."""
+def download(quarter: str, dest: str, retries: int = 8) -> str:
+    """Stream the quarterly ZIP to disk. Resumes a partial download via HTTP
+    Range requests and retries on stalls (60 s socket timeout)."""
     url = BASE_URL.format(quarter=quarter)
     zpath = os.path.join(dest, f"data_{quarter}.zip")
+    part = zpath + ".part"
     if os.path.exists(zpath):
         print(f"✔ {zpath} already downloaded")
         return zpath
     print(f"⬇ Downloading {url}\n  (quarterly archives are ~1 GB — this takes a while)")
-    req = Request(url, headers={"User-Agent": "storageiq-loader"})
-    with urlopen(req) as r, open(zpath + ".part", "wb") as f:
-        total = int(r.headers.get("Content-Length") or 0)
-        done = 0
-        while True:
-            chunk = r.read(1 << 20)
-            if not chunk:
-                break
-            f.write(chunk)
-            done += len(chunk)
-            if total:
-                sys.stdout.write(f"\r  {done / 1e6:,.0f} / {total / 1e6:,.0f} MB")
-                sys.stdout.flush()
-    os.rename(zpath + ".part", zpath)
-    print("\n✔ download complete")
-    return zpath
+
+    for attempt in range(retries):
+        done = os.path.getsize(part) if os.path.exists(part) else 0
+        headers = {"User-Agent": "storageiq-loader"}
+        if done:
+            headers["Range"] = f"bytes={done}-"
+            print(f"\n  resuming from {done / 1e6:,.0f} MB")
+        try:
+            with urlopen(Request(url, headers=headers), timeout=60) as r:
+                if done and r.status != 206:  # server ignored Range → restart
+                    done = 0
+                total = done + int(r.headers.get("Content-Length") or 0)
+                with open(part, "ab" if done else "wb") as f:
+                    while True:
+                        chunk = r.read(1 << 20)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        done += len(chunk)
+                        if total:
+                            sys.stdout.write(f"\r  {done / 1e6:,.0f} / {total / 1e6:,.0f} MB")
+                            sys.stdout.flush()
+            if total and done < total:
+                raise IOError(f"connection closed early at {done}/{total} bytes")
+            os.rename(part, zpath)
+            print("\n✔ download complete")
+            return zpath
+        except Exception as e:
+            print(f"\n  ⚠ {e} — retry {attempt + 1}/{retries}")
+    raise SystemExit(f"Download failed after {retries} attempts: {url}")
 
 
 def _daily_aggregate(df: pd.DataFrame) -> dict:
@@ -150,9 +168,15 @@ def iter_dir(raw_dir):
         yield p, p
 
 
+def iter_zips(zpaths):
+    for zpath in zpaths:
+        yield from iter_zip(zpath)
+
+
 def main():
     ap = argparse.ArgumentParser(description="Backblaze Drive Stats loader")
-    ap.add_argument("--quarter", help="e.g. Q1_2025 (see Backblaze downloads page)")
+    ap.add_argument("--quarter",
+                    help="e.g. Q1_2025, or comma-separated list Q2_2024,Q3_2024,Q1_2025")
     ap.add_argument("--raw-dir", help="folder of already-extracted daily CSVs")
     ap.add_argument("--keep-raw", action="store_true", help="keep the downloaded ZIP")
     args = ap.parse_args()
@@ -163,11 +187,13 @@ def main():
     if args.raw_dir:
         aggregate(iter_dir(args.raw_dir), out_daily, out_models)
     elif args.quarter:
-        zpath = download(args.quarter, DATA_DIR)
-        aggregate(iter_zip(zpath), out_daily, out_models)
+        quarters = [q.strip() for q in args.quarter.split(",") if q.strip()]
+        zpaths = [download(q, DATA_DIR) for q in quarters]
+        aggregate(iter_zips(zpaths), out_daily, out_models)
         if not args.keep_raw:
-            os.remove(zpath)
-            print("✔ removed ZIP (use --keep-raw to keep it)")
+            for zpath in zpaths:
+                os.remove(zpath)
+            print("✔ removed ZIPs (use --keep-raw to keep them)")
     else:
         ap.error("provide --quarter or --raw-dir")
 
