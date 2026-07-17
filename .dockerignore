@@ -1,0 +1,11 @@
+.git
+.github
+data/*.zip
+data/*.zip.part
+data/*.csv
+tests/raw
+outputs
+models
+__pycache__
+*.pyc
+.DS_Store

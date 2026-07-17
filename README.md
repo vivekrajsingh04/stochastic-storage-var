@@ -8,7 +8,9 @@
 
 | Component | Model | Implementation |
 | :--- | :--- | :--- |
-| **Forecasting** | LSTM + ARIMA(2,1,2) inverse-MAE weighted ensemble | PyTorch, `statsmodels` |
+| **Forecasting** | LSTM + ARIMA (AIC-selected order) inverse-MAE weighted ensemble | PyTorch, `statsmodels` |
+| **Baselines** | naive, seasonal-naive, damped ETS — every learned model must beat them | `statsmodels` |
+| **Validation** | 30-day hold-out (MAE + MASE) **and** rolling-origin walk-forward CV | custom |
 | **Anomaly detection** | Isolation Forest + 3σ z-score rules | `scikit-learn`, `scipy` |
 | **Risk quantification** | Gamma-Poisson (over-dispersed) Monte Carlo, 10,000 paths | `numpy` |
 | **Risk metrics** | VaR₉₅, CVaR₉₅ of cumulative failures over 90 days | custom |
@@ -23,6 +25,8 @@ pip install -r requirements.txt
 
 # 1. Fetch real telemetry (one Backblaze quarter ≈ 1 GB zipped)
 python data/download_backblaze.py --quarter Q1_2025
+#    …or several quarters as one continuous series:
+# python data/download_backblaze.py --quarter Q2_2024,Q3_2024,Q4_2024,Q1_2025
 
 # 2. Run the full pipeline: features → anomalies → forecast → Monte Carlo VaR
 python StorageIQ_Pipeline.py
@@ -51,7 +55,10 @@ stochastic-storage-var/
 │   ├── main.py                   # FastAPI backend (serves precomputed analytics)
 │   └── index.html                # Chart.js dashboard
 ├── tests/
-│   └── generate_fixture.py       # Schema-accurate mini-fixture for CI / smoke tests
+│   ├── generate_fixture.py       # Schema-accurate mini-fixture for CI / smoke tests
+│   ├── conftest.py               # Session fixtures: raw CSVs → aggregated fleet tables
+│   └── test_pipeline.py          # Loader, causality, anomaly, baseline, MC tests
+├── .github/workflows/ci.yml      # pytest + full fixture→pipeline e2e smoke on every push
 ├── requirements.txt
 └── render.yaml                   # One-click Render deploy config
 ```
@@ -65,9 +72,16 @@ The detector classifies flagged days into operational categories:
 * 🟡 **THERMAL_EVENT** — abnormal fleet temperature excursion (SMART 194)
 * 🟣 **STATISTICAL_OUTLIER** — multivariate outlier per Isolation Forest
 
-## 📈 Validation
+## 📈 Validation — leakage-free by construction
 
-Forecasts are validated on a 30-day hold-out (MAE/RMSE reported in `models/model_meta.json` and on the dashboard). Ensemble weights are set by inverse validation MAE, so the better model on *your* data window automatically dominates.
+* **Baselines first.** Naive, seasonal-naive and damped-ETS forecasts are evaluated alongside ARIMA and the LSTM. MASE is reported for every model (MASE < 1 beats a seasonal-naive walk). When a baseline wins, the dashboard says so.
+* **Two views of error.** A 30-day hold-out *and* rolling-origin walk-forward CV (expanding window, MAE mean ± std across folds) — a single split can flatter any model; the walk-forward can't.
+* **No leakage.** The LSTM and its scaler are fit on the training window only; the test window is never seen before scoring. Rolling features are causal (verified by test). ARIMA order is selected by AIC on the training window and frozen before evaluation.
+* **Tested in CI.** `pytest` covers loader schema, feature causality, anomaly flagging, baseline math, walk-forward fold logic and Monte Carlo quantile coherence; a full fixture→loader→pipeline e2e smoke runs on every push.
+
+## ⚠️ Known Limitations
+
+Fleet-level aggregation discards per-drive SMART signal (a per-drive survival model is the natural next step); failure clustering across days is not modeled by the independent-increment Monte Carlo; anomaly labels are unsupervised — there is no ground truth on real telemetry, so anomaly precision/recall is unknowable by design.
 
 ## 📜 Data License
 
