@@ -1,6 +1,8 @@
 # Stochastic Storage VaR Engine ⚡
 
-**Quantifying storage-fleet failure risk with real-world telemetry.** An end-to-end pipeline that models hard-drive degradation as a stochastic process — trained on **[Backblaze Drive Stats](https://www.backblaze.com/cloud-storage/resources/hard-drive-test-data)**, the public dataset covering 250,000+ production drives — and computes VaR₉₅ / CVaR₉₅ failure bounds via large-scale Monte Carlo simulation.
+[![CI](https://github.com/vivekrajsingh04/stochastic-storage-var/actions/workflows/ci.yml/badge.svg)](https://github.com/vivekrajsingh04/stochastic-storage-var/actions/workflows/ci.yml)
+
+**Quantifying storage-fleet failure risk with real-world telemetry.** An end-to-end pipeline that models hard-drive degradation as a stochastic process — built on **12 months of [Backblaze Drive Stats](https://www.backblaze.com/cloud-storage/resources/hard-drive-test-data)** (Apr 2024 – Mar 2025: **107.9M drive-days** across ~312,000 production drives and 88 drive models) — and computes VaR₉₅ / CVaR₉₅ failure bounds via large-scale Monte Carlo simulation.
 
 > **Why it matters:** capacity planners and SRE teams don't need a point forecast of failures — they need the *tail*. "How many drive replacements should we budget for next quarter with 95% confidence?" is a Value-at-Risk question, and this engine answers it with the same math used on trading desks.
 
