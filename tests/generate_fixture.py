@@ -25,9 +25,9 @@ MODELS = [
 ]
 
 
-def main(days: int, drives: int, seed: int = 42):
+def main(days: int, drives: int, seed: int = 42, out: str | None = None):
     rng = np.random.default_rng(seed)
-    out = os.path.join(HERE, "raw")
+    out = out or os.path.join(HERE, "raw")
     os.makedirs(out, exist_ok=True)
 
     serials = [f"ZX{i:06d}" for i in range(drives)]

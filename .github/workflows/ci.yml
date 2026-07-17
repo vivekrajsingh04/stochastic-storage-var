@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies (no torch — pipeline falls back to ARIMA)
+        run: |
+          pip install -r requirements.txt pytest httpx
+
+      - name: Run tests
+        run: pytest tests/ -v
+
+      - name: End-to-end smoke (fixture → loader → pipeline)
+        run: |
+          python tests/generate_fixture.py --days 150 --drives 800
+          python data/download_backblaze.py --raw-dir tests/raw
+          python StorageIQ_Pipeline.py
+          python - <<'EOF'
+          import json
+          d = json.load(open("outputs/dashboard_data.json"))
+          assert d["kpis"]["drives"] > 0
+          assert len(d["forecast"]["afr_pct"]) == 30
+          assert "walk_forward" in d["forecast"]["validation"]
+          assert d["risk"]["var95_failures"] <= d["risk"]["cvar95_failures"]
+          print("✔ e2e smoke OK:", d["meta"])
+          EOF
