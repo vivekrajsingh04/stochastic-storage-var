@@ -65,6 +65,27 @@ stochastic-storage-var/
 └── render.yaml                   # One-click Render deploy config
 ```
 
+## 🔌 Bring Your Own Fleet
+
+**The engine is schema-generic — Backblaze is the validation corpus, not a dependency.** Any fleet that emits daily unit-counts and failures runs through the same pipeline unchanged: server fleets, IoT devices, vehicle fleets, battery packs.
+
+Three ways in:
+
+1. **Dashboard upload** — POST a CSV to `/api/analyze` (or drag-drop on the dashboard's *Analyze your fleet* section) and get an ARIMA forecast + Monte Carlo VaR₉₅/CVaR₉₅ back in seconds. Processed in memory, nothing stored.
+2. **Loader** — point the aggregator at any folder of per-unit daily CSVs: `python data/download_backblaze.py --raw-dir /path/to/your/telemetry`
+3. **Direct** — write `data/fleet_daily.csv` yourself and run the pipeline.
+
+Minimal schema (one row per day):
+
+| Column | Type | Required |
+| :--- | :--- | :--- |
+| `Timestamp` | date | ✅ |
+| `Drive_Count` | int — units alive that day | ✅ |
+| `Failures` | int — units that failed that day | ✅ |
+| `Capacity_PB`, `Mean_<metric>` | float — any health telemetry | optional (powers anomaly typing) |
+
+The models never reference anything storage-specific: the forecast layer sees a rate series, the risk layer sees a count process. Auto-refresh (`.github/workflows/refresh-data.yml`) keeps the deployed Backblaze instance current — when a new quarter publishes, it re-ingests, retrains, and redeploys itself monthly with zero manual steps.
+
 ## 🔬 Anomaly Taxonomy
 
 The detector classifies flagged days into operational categories:
