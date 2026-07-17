@@ -4,97 +4,395 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>StorageIQ — Stochastic Storage VaR</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.152.2/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
 <style>
   :root{
-    --bg:#0b0f17; --panel:#111827; --panel2:#0f172a; --border:#1f2937;
-    --text:#e5e7eb; --muted:#9ca3af; --accent:#38bdf8; --accent2:#a78bfa;
-    --good:#34d399; --warn:#fbbf24; --bad:#f87171;
+    --bg:#04060b; --ink:#e8ecf1; --dim:#8b95a3; --faint:#525c6b;
+    --line:rgba(139,149,163,.14); --panel:rgba(13,18,28,.72);
+    --teal:#5eead4; --teal-dim:rgba(94,234,212,.12);
+    --violet:#a78bfa; --amber:#fbbf24; --red:#fb7185; --green:#4ade80;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+    --disp:'Space Grotesk',system-ui,sans-serif;
   }
   *{box-sizing:border-box;margin:0;padding:0}
-  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,-apple-system,sans-serif;min-height:100vh}
-  header{display:flex;justify-content:space-between;align-items:center;padding:20px 32px;border-bottom:1px solid var(--border);background:linear-gradient(90deg,#0b0f17,#101a2e)}
-  header h1{font-size:20px;letter-spacing:.5px}
-  header h1 span{color:var(--accent)}
-  .meta{color:var(--muted);font-size:13px;text-align:right}
-  .badge{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;background:#052e16;color:var(--good);border:1px solid #14532d;margin-left:8px}
-  main{max-width:1280px;margin:0 auto;padding:28px 24px}
-  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:24px}
-  .kpi{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px 20px}
-  .kpi .label{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:1px}
-  .kpi .value{font-size:28px;font-weight:600;margin-top:6px}
-  .kpi .sub{font-size:12px;color:var(--muted);margin-top:4px}
-  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-  .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:16px}
-  .card.full{grid-column:1/-1}
-  .card h2{font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:14px}
-  .chart-wrap{position:relative;height:300px}
-  table{width:100%;border-collapse:collapse;font-size:13px}
-  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--border)}
-  th{color:var(--muted);font-weight:500;text-transform:uppercase;font-size:11px;letter-spacing:1px}
-  tr:hover td{background:var(--panel2)}
-  .pill{padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600}
-  .pill.FAILURE_SPIKE{background:#450a0a;color:var(--bad)}
-  .pill.DEGRADATION_WAVE{background:#451a03;color:var(--warn)}
-  .pill.THERMAL_EVENT{background:#431407;color:#fb923c}
-  .pill.STATISTICAL_OUTLIER{background:#1e1b4b;color:var(--accent2)}
-  .risk-vals{display:flex;gap:28px;flex-wrap:wrap;margin-bottom:14px}
-  .risk-vals div b{display:block;font-size:24px}
-  .risk-vals div span{color:var(--muted);font-size:12px}
-  footer{color:var(--muted);text-align:center;font-size:12px;padding:24px}
-  #err{display:none;background:#450a0a;border:1px solid #7f1d1d;color:#fecaca;padding:16px 20px;border-radius:12px;margin-bottom:20px}
-  @media(max-width:900px){.grid{grid-template-columns:1fr}}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--ink);font-family:var(--disp);
+       -webkit-font-smoothing:antialiased;overflow-x:hidden}
+  ::selection{background:var(--teal);color:#04060b}
+
+  /* grain + vignette over everything, very faint */
+  body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:3;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='.028'/%3E%3C/svg%3E")}
+
+  #bg3d{position:fixed;inset:0;z-index:0;opacity:.55}
+
+  nav{position:fixed;top:0;left:0;right:0;z-index:20;display:flex;align-items:center;
+      justify-content:space-between;padding:14px 28px;
+      background:linear-gradient(rgba(4,6,11,.85),rgba(4,6,11,0));
+      backdrop-filter:blur(2px)}
+  .brand{font-family:var(--mono);font-size:13px;letter-spacing:.18em;color:var(--dim)}
+  .brand b{color:var(--ink);font-weight:600}
+  .brand i{color:var(--teal);font-style:normal}
+  nav .links{display:flex;gap:22px}
+  nav a{color:var(--faint);text-decoration:none;font-family:var(--mono);font-size:11px;
+        letter-spacing:.14em;text-transform:uppercase;transition:color .25s}
+  nav a:hover{color:var(--teal)}
+
+  main{position:relative;z-index:5}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 28px}
+
+  /* ── hero ── */
+  #hero{min-height:92vh;display:flex;flex-direction:column;justify-content:center;position:relative}
+  .kicker{font-family:var(--mono);font-size:12px;letter-spacing:.22em;text-transform:uppercase;
+          color:var(--teal);margin-bottom:22px;display:flex;align-items:center;gap:12px}
+  .kicker::before{content:'';width:34px;height:1px;background:var(--teal)}
+  h1{font-size:clamp(44px,7.2vw,96px);line-height:.98;font-weight:600;letter-spacing:-.02em}
+  h1 .thin{color:var(--faint);font-weight:400}
+  .hero-sub{margin-top:26px;max-width:560px;color:var(--dim);font-size:16px;line-height:1.7}
+  .hero-sub b{color:var(--ink);font-weight:500}
+  .hero-meta{margin-top:38px;display:flex;gap:34px;flex-wrap:wrap;font-family:var(--mono)}
+  .hero-meta div span{display:block;font-size:10px;letter-spacing:.18em;text-transform:uppercase;
+                      color:var(--faint);margin-bottom:6px}
+  .hero-meta div b{font-size:14px;font-weight:500;color:var(--ink)}
+  .scroll-cue{position:absolute;bottom:34px;left:28px;font-family:var(--mono);font-size:10px;
+              letter-spacing:.2em;color:var(--faint);text-transform:uppercase}
+  .scroll-cue::after{content:'';display:block;width:1px;height:44px;background:linear-gradient(var(--teal),transparent);margin-top:10px;margin-left:2px}
+
+  /* ── sections ── */
+  section{padding:90px 0}
+  .sec-head{display:flex;align-items:baseline;gap:18px;margin-bottom:34px}
+  .sec-num{font-family:var(--mono);font-size:12px;color:var(--teal);letter-spacing:.1em}
+  .sec-head h2{font-size:clamp(22px,3vw,32px);font-weight:600;letter-spacing:-.01em}
+  .sec-head p{margin-left:auto;color:var(--faint);font-family:var(--mono);font-size:11px;
+              letter-spacing:.08em;max-width:320px;text-align:right}
+
+  /* ── KPI strip ── */
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));border:1px solid var(--line);border-radius:2px}
+  .kpi{padding:26px 22px;border-right:1px solid var(--line);position:relative;overflow:hidden}
+  .kpi:last-child{border-right:none}
+  .kpi .label{font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint)}
+  .kpi .value{font-family:var(--mono);font-size:30px;font-weight:600;margin-top:12px;
+              font-variant-numeric:tabular-nums;color:var(--ink)}
+  .kpi .value em{font-style:normal;font-size:15px;color:var(--dim);margin-left:2px}
+  .kpi .sub{font-size:11px;color:var(--faint);margin-top:8px}
+  .kpi.hot .value{color:var(--amber)}
+  .kpi.risk .value{color:var(--red)}
+
+  /* ── cards ── */
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:2px;
+        padding:26px;backdrop-filter:blur(8px)}
+  .card h3{font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:.18em;
+           text-transform:uppercase;color:var(--dim);margin-bottom:20px;display:flex;gap:10px;align-items:center}
+  .card h3::before{content:'';width:6px;height:6px;background:var(--teal);border-radius:50%}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  .chart-wrap{position:relative;height:340px}
+  .chart-wrap.sm{height:250px}
+
+  /* ── validation bars ── */
+  .val-rows{display:flex;flex-direction:column;gap:14px;margin-top:6px}
+  .val-row{display:grid;grid-template-columns:130px 1fr 74px;gap:14px;align-items:center;font-family:var(--mono)}
+  .val-row .name{font-size:12px;color:var(--dim);letter-spacing:.06em}
+  .val-row .bar{height:8px;background:rgba(139,149,163,.08);border-radius:1px;overflow:hidden}
+  .val-row .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--teal),var(--violet));border-radius:1px}
+  .val-row.winner .bar i{background:var(--green)}
+  .val-row .num{font-size:12px;text-align:right;color:var(--ink);font-variant-numeric:tabular-nums}
+  .val-note{margin-top:18px;font-size:12px;color:var(--faint);line-height:1.6;
+            border-left:2px solid var(--teal);padding-left:14px}
+
+  /* ── risk stats ── */
+  .risk-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);
+              border:1px solid var(--line);margin-bottom:20px}
+  .risk-stats div{background:var(--bg);padding:18px 20px}
+  .risk-stats b{display:block;font-family:var(--mono);font-size:26px;font-weight:600;font-variant-numeric:tabular-nums}
+  .risk-stats span{font-size:10px;font-family:var(--mono);letter-spacing:.14em;
+                   text-transform:uppercase;color:var(--faint)}
+  .risk-stats .var b{color:var(--amber)}
+  .risk-stats .cvar b{color:var(--red)}
+
+  /* ── tables ── */
+  table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+  th{color:var(--faint);font-weight:400;font-size:10px;text-transform:uppercase;letter-spacing:.16em}
+  td{color:var(--dim)}
+  td:first-child{color:var(--ink)}
+  tr{transition:background .2s}
+  tbody tr:hover{background:rgba(94,234,212,.04)}
+  .pill{padding:3px 9px;border-radius:1px;font-size:10px;letter-spacing:.08em;font-weight:500}
+  .pill.FAILURE_SPIKE{background:rgba(251,113,133,.12);color:var(--red)}
+  .pill.DEGRADATION_WAVE{background:rgba(251,191,36,.12);color:var(--amber)}
+  .pill.THERMAL_EVENT{background:rgba(251,146,60,.12);color:#fb923c}
+  .pill.STATISTICAL_OUTLIER{background:rgba(167,139,250,.12);color:var(--violet)}
+  .scrolly{max-height:320px;overflow:auto}
+  .scrolly::-webkit-scrollbar{width:4px}
+  .scrolly::-webkit-scrollbar-thumb{background:var(--faint)}
+
+  /* ── methodology / footer ── */
+  .method{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px}
+  .method .card p{font-size:13px;line-height:1.7;color:var(--dim)}
+  .method .card p b{color:var(--ink);font-weight:500}
+  footer{border-top:1px solid var(--line);padding:44px 0 60px;margin-top:40px}
+  footer .wrap{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap;
+               font-family:var(--mono);font-size:11px;color:var(--faint);letter-spacing:.06em}
+  footer a{color:var(--dim);text-decoration:none;border-bottom:1px solid var(--line)}
+  footer a:hover{color:var(--teal)}
+
+  #err{display:none;margin:120px auto 0;max-width:640px;background:rgba(251,113,133,.06);
+       border:1px solid rgba(251,113,133,.25);color:var(--red);padding:22px 26px;
+       font-family:var(--mono);font-size:13px;line-height:1.7;border-radius:2px}
+
+  .reveal{opacity:0;transform:translateY(28px)}
+  @media(max-width:900px){
+    .grid2{grid-template-columns:1fr}
+    .sec-head p{display:none}
+    .risk-stats{grid-template-columns:1fr}
+  }
+  @media(max-width:700px){
+    nav .links{display:none}
+    .brand{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .scroll-cue{display:none}
+    #hero{min-height:80vh;padding-top:96px}
+    section{padding:60px 0}
+  }
+  @media(prefers-reduced-motion:reduce){
+    .reveal{opacity:1;transform:none}
+    #bg3d{display:none}
+  }
 </style>
 </head>
 <body>
-<header>
-  <h1>⚡ Storage<span>IQ</span> — Stochastic Storage VaR<span class="badge" id="src">real telemetry</span></h1>
-  <div class="meta" id="meta">loading…</div>
-</header>
+
+<canvas id="bg3d"></canvas>
+
+<nav>
+  <div class="brand"><b>STORAGE</b><i>IQ</i>&nbsp;&nbsp;/ stochastic storage VaR</div>
+  <div class="links">
+    <a href="#telemetry">Telemetry</a>
+    <a href="#forecast">Forecast</a>
+    <a href="#validation">Validation</a>
+    <a href="#risk">Risk</a>
+    <a href="#fleet">Fleet</a>
+  </div>
+</nav>
+
 <main>
   <div id="err"></div>
-  <div class="kpis" id="kpis"></div>
 
-  <div class="card full">
-    <h2>Fleet Annualized Failure Rate — history & 30-day ensemble forecast</h2>
-    <div class="chart-wrap"><canvas id="afrChart"></canvas></div>
+  <div class="wrap" id="hero">
+    <div class="kicker">Backblaze Drive Stats · real fleet telemetry</div>
+    <h1>Failure risk,<br><span class="thin">quantified as</span> VaR.</h1>
+    <p class="hero-sub">Probabilistic failure forecasting over a live fleet of
+      <b id="heroDrives">—</b> hard drives. ARIMA × LSTM ensemble forecasts the
+      annualized failure rate; <b>10,000 Gamma-Poisson Monte Carlo paths</b>
+      turn it into a 90-day Value-at-Risk on cumulative drive failures.</p>
+    <div class="hero-meta">
+      <div><span>Window</span><b id="heroWindow">—</b></div>
+      <div><span>Fleet capacity</span><b id="heroCap">—</b></div>
+      <div><span>Model</span><b id="heroModel">ARIMA + LSTM</b></div>
+      <div><span>Risk metric</span><b>VaR₉₅ / CVaR₉₅</b></div>
+    </div>
+    <div class="scroll-cue">scroll</div>
   </div>
 
-  <div class="grid">
-    <div class="card">
-      <h2>Daily failures & fleet size</h2>
+  <section id="telemetry" class="wrap">
+    <div class="sec-head reveal">
+      <span class="sec-num">01</span><h2>Fleet telemetry</h2>
+      <p>daily aggregates over every reporting drive in the fleet</p>
+    </div>
+    <div class="kpis reveal" id="kpis"></div>
+    <div style="height:20px"></div>
+    <div class="card reveal">
+      <h3>Daily failures × fleet size</h3>
       <div class="chart-wrap"><canvas id="failChart"></canvas></div>
     </div>
-    <div class="card">
-      <h2>Monte Carlo — cumulative failures (10,000 paths, 90d)</h2>
-      <div class="risk-vals" id="riskVals"></div>
-      <div class="chart-wrap" style="height:220px"><canvas id="mcChart"></canvas></div>
+  </section>
+
+  <section id="forecast" class="wrap">
+    <div class="sec-head reveal">
+      <span class="sec-num">02</span><h2>AFR forecast</h2>
+      <p>annualized failure rate — history and 30-day ensemble forecast</p>
     </div>
-    <div class="card">
-      <h2>Anomalous days (Isolation Forest + 3σ)</h2>
-      <div style="max-height:300px;overflow:auto">
-        <table><thead><tr><th>Date</th><th>Type</th><th>Failures</th><th>Z-score</th></tr></thead>
-        <tbody id="anomBody"></tbody></table>
+    <div class="card reveal">
+      <h3>AFR % · 7-day smoothed · ensemble forecast</h3>
+      <div class="chart-wrap"><canvas id="afrChart"></canvas></div>
+    </div>
+  </section>
+
+  <section id="validation" class="wrap">
+    <div class="sec-head reveal">
+      <span class="sec-num">03</span><h2>Honest validation</h2>
+      <p>every learned model must beat the naive baselines to earn its keep</p>
+    </div>
+    <div class="grid2">
+      <div class="card reveal">
+        <h3>Hold-out MASE — lower is better</h3>
+        <div class="val-rows" id="valRows"></div>
+        <div class="val-note" id="valNote"></div>
+      </div>
+      <div class="card reveal">
+        <h3>Walk-forward CV — rolling origin</h3>
+        <div class="scrolly">
+          <table>
+            <thead><tr><th>Model</th><th>Folds</th><th>MAE (mean)</th><th>± std</th></tr></thead>
+            <tbody id="wfBody"></tbody>
+          </table>
+        </div>
+        <div class="val-note">Expanding-window evaluation across multiple forecast
+          origins — a single train/test split can flatter any model; this can't.</div>
       </div>
     </div>
-    <div class="card">
-      <h2>Drive models — annualized failure rate</h2>
-      <div style="max-height:300px;overflow:auto">
-        <table><thead><tr><th>Model</th><th>Drive-days</th><th>Failures</th><th>AFR %</th></tr></thead>
-        <tbody id="modelBody"></tbody></table>
+  </section>
+
+  <section id="risk" class="wrap">
+    <div class="sec-head reveal">
+      <span class="sec-num">04</span><h2>Monte Carlo risk</h2>
+      <p>gamma-poisson failure paths · over-dispersed · forecast-drifted λ</p>
+    </div>
+    <div class="card reveal">
+      <h3>Cumulative failures — 10,000 paths, 90 days</h3>
+      <div class="risk-stats" id="riskStats"></div>
+      <div class="chart-wrap sm"><canvas id="mcChart"></canvas></div>
+    </div>
+  </section>
+
+  <section id="fleet" class="wrap">
+    <div class="sec-head reveal">
+      <span class="sec-num">05</span><h2>Anomalies & fleet detail</h2>
+      <p>isolation forest + 3σ rules · per-model failure rates</p>
+    </div>
+    <div class="grid2">
+      <div class="card reveal">
+        <h3>Anomalous days</h3>
+        <div class="scrolly">
+          <table>
+            <thead><tr><th>Date</th><th>Type</th><th>Failures</th><th>Z</th></tr></thead>
+            <tbody id="anomBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card reveal">
+        <h3>Drive models — annualized failure rate</h3>
+        <div class="scrolly">
+          <table>
+            <thead><tr><th>Model</th><th>Drive-days</th><th>Fails</th><th>AFR %</th></tr></thead>
+            <tbody id="modelBody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
-  </div>
+  </section>
+
+  <section class="wrap">
+    <div class="sec-head reveal">
+      <span class="sec-num">06</span><h2>Method</h2>
+      <p>what this system actually does — and what it doesn't claim</p>
+    </div>
+    <div class="method">
+      <div class="card reveal"><h3>Forecast</h3>
+        <p><b>ARIMA</b> (AIC-selected order) ensembled with a 2-layer <b>LSTM</b>,
+        weighted by inverse hold-out MAE. Validated against naive, seasonal-naive
+        and ETS baselines with MASE + walk-forward CV — leakage-free by
+        construction, tested in CI.</p></div>
+      <div class="card reveal"><h3>Risk</h3>
+        <p>Daily failures ~ <b>Poisson(λ·N)</b> with Gamma-distributed λ for
+        over-dispersion, λ drifting along the forecast path. VaR₉₅/CVaR₉₅ of
+        cumulative failures answer a real question: <b>how many spares to
+        stock</b>.</p></div>
+      <div class="card reveal"><h3>Limitations</h3>
+        <p>Fleet-level aggregation discards per-drive SMART signal; failure
+        clustering across days is not modeled; anomaly labels are unsupervised.
+        These are known trade-offs, not oversights — see README.</p></div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap">
+      <div>STORAGE<span style="color:var(--teal)">IQ</span> · stochastic storage VaR engine</div>
+      <div>data: <a href="https://www.backblaze.com/cloud-storage/resources/hard-drive-test-data" target="_blank" rel="noopener">Backblaze Drive Stats</a></div>
+      <div id="footMeta">—</div>
+    </div>
+  </footer>
 </main>
-<footer id="foot">StorageIQ · LSTM + ARIMA ensemble · Gamma-Poisson Monte Carlo · data: Backblaze Drive Stats</footer>
 
 <script>
-const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
-Chart.defaults.color = css('--muted');
-Chart.defaults.borderColor = css('--border');
-Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
+/* ═══ three.js — drifting particle field, depth-fogged ═══ */
+(function(){
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches || !window.THREE) return;
+  const canvas = document.getElementById('bg3d');
+  const renderer = new THREE.WebGLRenderer({canvas, alpha:true, antialias:false});
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.6));
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0x04060b, 0.045);
+  const cam = new THREE.PerspectiveCamera(60, 1, .1, 100);
+  cam.position.z = 18;
 
+  const N = 900, pos = new Float32Array(N*3), phase = new Float32Array(N);
+  for (let i=0;i<N;i++){
+    pos[i*3]   = (Math.random()-.5)*70;
+    pos[i*3+1] = (Math.random()-.5)*40;
+    pos[i*3+2] = (Math.random()-.5)*30;
+    phase[i] = Math.random()*Math.PI*2;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const pts = new THREE.Points(geo, new THREE.PointsMaterial({
+    color:0x5eead4, size:.055, transparent:true, opacity:.7, depthWrite:false}));
+  scene.add(pts);
+
+  // faint wireframe grid plane, tilted — reads as a "risk surface"
+  const grid = new THREE.GridHelper(90, 36, 0x1c2a3a, 0x101a26);
+  grid.position.y = -9; grid.rotation.x = .06;
+  scene.add(grid);
+
+  let mx=0, my=0, scrollY=0;
+  addEventListener('mousemove', e=>{
+    mx = (e.clientX/innerWidth-.5); my = (e.clientY/innerHeight-.5);
+  }, {passive:true});
+  addEventListener('scroll', ()=>{ scrollY = window.scrollY; }, {passive:true});
+
+  function size(){
+    const w = innerWidth, h = innerHeight;
+    renderer.setSize(w, h, false);
+    cam.aspect = w/h; cam.updateProjectionMatrix();
+  }
+  addEventListener('resize', size); size();
+
+  const clock = new THREE.Clock();
+  (function tick(){
+    const t = clock.getElapsedTime();
+    const p = geo.attributes.position.array;
+    for (let i=0;i<N;i++) p[i*3+1] += Math.sin(t*.6 + phase[i]) * .0018;
+    geo.attributes.position.needsUpdate = true;
+    pts.rotation.y = t*.014;
+    cam.position.x += (mx*2.2 - cam.position.x)*.03;
+    cam.position.y += (-my*1.4 - scrollY*.002 - cam.position.y)*.03;
+    cam.lookAt(0,0,0);
+    renderer.render(scene, cam);
+    requestAnimationFrame(tick);
+  })();
+})();
+
+/* ═══ data + charts ═══ */
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 const fmt = n => n >= 1e6 ? (n/1e6).toFixed(2)+'M' : n >= 1e3 ? (n/1e3).toFixed(1)+'k' : (+n).toLocaleString();
+const MODEL_LABELS = {naive:'Naive', seasonal_naive:'Seasonal naive', ets:'ETS (damped)', arima:'ARIMA', lstm:'LSTM'};
+
+Chart.defaults.color = css('--faint');
+Chart.defaults.borderColor = 'rgba(139,149,163,.08)';
+Chart.defaults.font.family = "'IBM Plex Mono', monospace";
+Chart.defaults.font.size = 10;
+Chart.defaults.plugins.legend.labels.boxWidth = 8;
+Chart.defaults.plugins.legend.labels.boxHeight = 8;
+Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(9,13,20,.95)';
+Chart.defaults.plugins.tooltip.borderColor = 'rgba(94,234,212,.25)';
+Chart.defaults.plugins.tooltip.borderWidth = 1;
+Chart.defaults.plugins.tooltip.titleFont = {family:"'IBM Plex Mono', monospace", size:10};
+Chart.defaults.plugins.tooltip.bodyFont = {family:"'IBM Plex Mono', monospace", size:10};
 
 async function boot(){
   let d;
@@ -105,71 +403,154 @@ async function boot(){
   }catch(e){
     const el = document.getElementById('err');
     el.style.display='block';
-    el.textContent = '⚠ ' + e.message + ' — run `python StorageIQ_Pipeline.py` to generate analytics.';
+    el.textContent = 'NO ANALYTICS — ' + e.message + ' · run `python StorageIQ_Pipeline.py` first.';
     return;
   }
 
-  document.getElementById('meta').innerHTML =
-    `${d.meta.start} → ${d.meta.end} · ${d.meta.days} days<br><span style="font-size:11px">${d.meta.source}</span>`;
+  /* hero */
+  document.getElementById('heroDrives').textContent = fmt(d.kpis.drives);
+  document.getElementById('heroWindow').textContent = `${d.meta.start} → ${d.meta.end}`;
+  document.getElementById('heroCap').textContent = d.kpis.capacity_pb.toFixed(1) + ' PB';
+  const v = d.forecast.validation;
+  if (!v.lstm_mae) document.getElementById('heroModel').textContent = 'ARIMA (AIC-selected)';
+  document.getElementById('footMeta').textContent =
+    `generated ${d.meta.generated} · ${d.meta.days} days · ${d.meta.source}`;
 
-  // KPIs
-  const k = d.kpis;
+  /* KPIs with GSAP count-up */
   const kpis = [
-    ['Fleet size', fmt(k.drives), 'drives reporting'],
-    ['Capacity', k.capacity_pb.toFixed(2)+' PB', 'raw capacity'],
-    ['Failures', fmt(k.failures_total), 'in observation window'],
-    ['AFR (7d)', k.afr_pct.toFixed(2)+'%', 'annualized failure rate'],
-    ['VaR₉₅', fmt(Math.round(d.risk.var95_failures)), `failures / ${d.risk.horizon_days}d`],
-    ['Anomaly days', k.anomaly_days, 'flagged by ensemble'],
+    ['fleet size', d.kpis.drives, '', 'drives reporting', ''],
+    ['capacity', d.kpis.capacity_pb, ' PB', 'raw storage', ''],
+    ['failures', d.kpis.failures_total, '', 'observation window', ''],
+    ['AFR · 7d', d.kpis.afr_pct, ' %', 'annualized failure rate', 'hot'],
+    ['VaR₉₅', Math.round(d.risk.var95_failures), '', `failures / ${d.risk.horizon_days}d`, 'risk'],
+    ['anomaly days', d.kpis.anomaly_days, '', 'IF + 3σ flagged', ''],
   ];
-  document.getElementById('kpis').innerHTML = kpis.map(([l,v,s]) =>
-    `<div class="kpi"><div class="label">${l}</div><div class="value">${v}</div><div class="sub">${s}</div></div>`).join('');
+  document.getElementById('kpis').innerHTML = kpis.map(([l,val,unit,sub,cls]) =>
+    `<div class="kpi ${cls}"><div class="label">${l}</div>
+     <div class="value" data-n="${val}" data-u="${unit}">0${unit&&`<em>${unit}</em>`}</div>
+     <div class="sub">${sub}</div></div>`).join('');
 
-  // AFR history + forecast
+  /* AFR chart */
   const labels = [...d.series.dates, ...d.forecast.dates];
   const hist = d.series.afr_7d, fc = d.forecast.afr_pct;
-  new Chart(afrChart, {type:'line', data:{labels,
-    datasets:[
-      {label:'AFR % (7d avg)', data:hist, borderColor:css('--accent'), backgroundColor:'rgba(56,189,248,.08)', fill:true, pointRadius:0, borderWidth:2},
-      {label:'Forecast', data:[...Array(hist.length-1).fill(null), hist[hist.length-1], ...fc], borderColor:css('--accent2'), borderDash:[6,4], pointRadius:0, borderWidth:2},
+  const fcLine = [...Array(Math.max(hist.length-1,0)).fill(null), hist[hist.length-1], ...fc];
+  new Chart(afrChart, {type:'line', data:{labels, datasets:[
+      {label:'AFR % (7d)', data:hist, borderColor:css('--teal'),
+       backgroundColor:'rgba(94,234,212,.05)', fill:true, pointRadius:0, borderWidth:1.6, tension:.25},
+      {label:'ensemble forecast', data:fcLine, borderColor:css('--violet'),
+       borderDash:[5,4], pointRadius:0, borderWidth:1.6, tension:.25},
     ]},
     options:{maintainAspectRatio:false, interaction:{mode:'index',intersect:false},
-      scales:{x:{ticks:{maxTicksLimit:10}}, y:{title:{display:true,text:'AFR %'}}}}});
+      scales:{x:{ticks:{maxTicksLimit:9,maxRotation:0}}, y:{title:{display:true,text:'AFR %'}}}}});
 
-  // failures + fleet size
+  /* failures + fleet */
   new Chart(failChart, {data:{labels:d.series.dates, datasets:[
-      {type:'bar', label:'Daily failures', data:d.series.failures, backgroundColor:'rgba(248,113,113,.55)', yAxisID:'y'},
-      {type:'line', label:'Fleet size', data:d.series.drive_count, borderColor:css('--good'), pointRadius:0, borderWidth:2, yAxisID:'y1'},
+      {type:'bar', label:'daily failures', data:d.series.failures,
+       backgroundColor:'rgba(251,113,133,.4)', borderRadius:1, yAxisID:'y'},
+      {type:'line', label:'fleet size', data:d.series.drive_count, borderColor:css('--green'),
+       pointRadius:0, borderWidth:1.4, yAxisID:'y1', tension:.2},
     ]},
     options:{maintainAspectRatio:false, interaction:{mode:'index',intersect:false},
-      scales:{x:{ticks:{maxTicksLimit:8}}, y:{title:{display:true,text:'failures'}},
+      scales:{x:{ticks:{maxTicksLimit:8,maxRotation:0}}, y:{title:{display:true,text:'failures'}},
               y1:{position:'right', grid:{drawOnChartArea:false}, title:{display:true,text:'drives'}}}}});
 
-  // Monte Carlo fan
-  const q = d.risk.cum_quantiles, days = q.p50.map((_,i)=>i+1);
-  document.getElementById('riskVals').innerHTML = `
+  /* validation MASE bars */
+  const models = Object.keys(MODEL_LABELS).filter(m => v[`${m}_mase`] !== undefined);
+  if (models.length){
+    const best = models.reduce((a,b)=> v[`${a}_mase`] <= v[`${b}_mase`] ? a : b);
+    const maxMase = Math.max(...models.map(m => v[`${m}_mase`]));
+    document.getElementById('valRows').innerHTML = models.map(m => `
+      <div class="val-row ${m===best?'winner':''}">
+        <div class="name">${MODEL_LABELS[m]}${m===best?' ▸':''}</div>
+        <div class="bar"><i data-w="${(v[`${m}_mase`]/maxMase*100).toFixed(1)}"></i></div>
+        <div class="num">${v[`${m}_mase`].toFixed(3)}</div>
+      </div>`).join('');
+    document.getElementById('valNote').innerHTML =
+      `MASE &lt; 1 beats a seasonal-naive walk. Best on hold-out: <b style="color:var(--green)">${MODEL_LABELS[best]}</b>` +
+      ` · ARIMA order (${(v.arima_order||[]).join(',')})` +
+      (v.lstm_weight !== undefined ? ` · ensemble w<sub>LSTM</sub> = ${v.lstm_weight}` : '') +
+      `. Reported honestly — when a baseline wins, it says so.`;
+  } else {
+    document.getElementById('valRows').innerHTML =
+      '<div class="val-row"><div class="name" style="color:var(--faint)">payload predates baseline suite — re-run StorageIQ_Pipeline.py</div></div>';
+    document.getElementById('valNote').textContent =
+      `hold-out ARIMA MAE ${(v.arima_mae ?? 0).toExponential(2)} · ensemble w_LSTM = ${v.lstm_weight ?? 0}`;
+  }
+
+  /* walk-forward table */
+  const wf = v.walk_forward || {};
+  document.getElementById('wfBody').innerHTML = Object.entries(wf)
+    .sort((a,b)=>a[1].mae_mean-b[1].mae_mean)
+    .map(([m,r],i)=>`<tr><td>${i===0?'▸ ':''}${MODEL_LABELS[m]||m}</td><td>${r.folds}</td>
+      <td>${r.mae_mean.toExponential(2)}</td><td>${r.mae_std.toExponential(1)}</td></tr>`).join('')
+    || '<tr><td colspan="4">series too short for walk-forward folds</td></tr>';
+
+  /* risk */
+  document.getElementById('riskStats').innerHTML = `
     <div><b>${fmt(Math.round(d.risk.expected_failures))}</b><span>expected failures</span></div>
-    <div><b style="color:var(--warn)">${fmt(Math.round(d.risk.var95_failures))}</b><span>VaR₉₅</span></div>
-    <div><b style="color:var(--bad)">${fmt(Math.round(d.risk.cvar95_failures))}</b><span>CVaR₉₅ (tail mean)</span></div>`;
+    <div class="var"><b>${fmt(Math.round(d.risk.var95_failures))}</b><span>VaR₉₅</span></div>
+    <div class="cvar"><b>${fmt(Math.round(d.risk.cvar95_failures))}</b><span>CVaR₉₅ · tail mean</span></div>`;
+  const q = d.risk.cum_quantiles, days = q.p50.map((_,i)=>i+1);
   new Chart(mcChart, {type:'line', data:{labels:days, datasets:[
-      {label:'p95', data:q.p95, borderColor:'transparent', backgroundColor:'rgba(248,113,113,.15)', fill:'+1', pointRadius:0},
-      {label:'median', data:q.p50, borderColor:css('--accent'), borderWidth:2, pointRadius:0},
-      {label:'p05', data:q.p05, borderColor:'transparent', backgroundColor:'rgba(248,113,113,.15)', fill:'-1', pointRadius:0},
+      {label:'p95', data:q.p95, borderColor:'rgba(251,113,133,.5)', borderWidth:1,
+       backgroundColor:'rgba(251,113,133,.08)', fill:'+1', pointRadius:0},
+      {label:'median', data:q.p50, borderColor:css('--teal'), borderWidth:1.8, pointRadius:0},
+      {label:'p05', data:q.p05, borderColor:'rgba(139,149,163,.3)', borderWidth:1,
+       backgroundColor:'rgba(251,113,133,.08)', fill:'-1', pointRadius:0},
     ]},
     options:{maintainAspectRatio:false, plugins:{legend:{display:false}},
-      scales:{x:{title:{display:true,text:'days ahead'},ticks:{maxTicksLimit:9}}, y:{title:{display:true,text:'cumulative failures'}}}}});
+      scales:{x:{title:{display:true,text:'days ahead'},ticks:{maxTicksLimit:9}},
+              y:{title:{display:true,text:'cumulative failures'}}}}});
 
-  // anomalies table
-  document.getElementById('anomBody').innerHTML = (d.anomalies.length ? d.anomalies : []).map(a =>
-    `<tr><td>${a.date}</td><td><span class="pill ${a.type}">${a.type.replace('_',' ')}</span></td><td>${a.failures}</td><td>${a.z}</td></tr>`
-  ).join('') || '<tr><td colspan="4" style="color:var(--muted)">no anomalies flagged</td></tr>';
+  /* tables */
+  document.getElementById('anomBody').innerHTML = (d.anomalies||[]).map(a =>
+    `<tr><td>${a.date}</td><td><span class="pill ${a.type}">${a.type.replace(/_/g,' ')}</span></td>
+     <td>${a.failures}</td><td>${a.z}</td></tr>`).join('')
+    || '<tr><td colspan="4" style="color:var(--faint)">no anomalous days flagged</td></tr>';
 
-  // model table
   document.getElementById('modelBody').innerHTML = (d.drive_models||[]).map(m =>
     `<tr><td>${m.Model}</td><td>${fmt(m.Drive_Days)}</td><td>${m.Failures}</td>
-     <td style="color:${m.AFR_Pct>2?'var(--bad)':m.AFR_Pct>1?'var(--warn)':'var(--good)'}">${m.AFR_Pct.toFixed(2)}</td></tr>`
-  ).join('') || '<tr><td colspan="4" style="color:var(--muted)">run the loader with model stats</td></tr>';
+     <td style="color:${m.AFR_Pct>2?'var(--red)':m.AFR_Pct>1?'var(--amber)':'var(--green)'}">${m.AFR_Pct.toFixed(2)}</td></tr>`
+  ).join('') || '<tr><td colspan="4" style="color:var(--faint)">run the loader for model stats</td></tr>';
+
+  animate();
 }
+
+/* ═══ GSAP entrances ═══ */
+function animate(){
+  if (!window.gsap) { document.querySelectorAll('.reveal').forEach(el=>{el.style.opacity=1;el.style.transform='none';}); return; }
+  gsap.registerPlugin(ScrollTrigger);
+
+  gsap.from('#hero .kicker', {opacity:0, x:-24, duration:.8, ease:'power3.out'});
+  gsap.from('#hero h1', {opacity:0, y:34, duration:1, delay:.15, ease:'power3.out'});
+  gsap.from('#hero .hero-sub, #hero .hero-meta, #hero .scroll-cue',
+            {opacity:0, y:24, duration:.9, delay:.35, stagger:.12, ease:'power3.out'});
+
+  document.querySelectorAll('.reveal').forEach(el=>{
+    gsap.to(el, {opacity:1, y:0, duration:.85, ease:'power3.out',
+      scrollTrigger:{trigger:el, start:'top 85%'}});
+  });
+
+  /* KPI count-up when strip enters */
+  document.querySelectorAll('.kpi .value').forEach(el=>{
+    const n = parseFloat(el.dataset.n), unit = el.dataset.u || '';
+    const dec = Number.isInteger(n) ? 0 : 2;
+    const obj = {v:0};
+    gsap.to(obj, {v:n, duration:1.6, ease:'power2.out',
+      scrollTrigger:{trigger:el, start:'top 88%'},
+      onUpdate(){
+        el.innerHTML = (dec ? obj.v.toFixed(dec) : fmt(Math.round(obj.v)))
+                       + (unit ? `<em>${unit}</em>` : '');
+      }});
+  });
+
+  /* validation bars grow */
+  document.querySelectorAll('.val-row .bar i').forEach(el=>{
+    gsap.to(el, {width: el.dataset.w + '%', duration:1.1, ease:'power3.out',
+      scrollTrigger:{trigger:el, start:'top 90%'}});
+  });
+}
+
 boot();
 </script>
 </body>
